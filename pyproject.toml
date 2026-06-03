@@ -38,6 +38,7 @@ embryo-replay = "embryo.run.replay:main"
 embryo-assemble-stack = "embryo.models.stack:main"
 embryo-train-supervised = "embryo.run.train_supervised:main"
 embryo-supervised-memory-pipeline = "embryo.pipelines.supervised_memory:main"
+embryo-long-run-protocol = "embryo.run.long_run:main"
 embryo-check-release = "embryo.run.release_check:main"
 
 [tool.setuptools.packages.find]

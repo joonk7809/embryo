@@ -20,6 +20,11 @@ This is a mechanism result, not a task-performance result.
 - It does not include PPO or reinforcement learning.
 - It does not include online fine-tuning.
 - It does not demonstrate transfer to Minecraft, Craftax, or robotics.
-- It does not allow reward, done flags, semantic maps, inventory, player position, achievements, source metadata, or backend internals as actor/query inputs.
+- It does not allow reward, done flags, semantic maps, privileged backend
+  inventory, player position, achievements, source metadata, or backend
+  internals as actor/query inputs.
+- A deployable inventory belief may be added as a future memory surface only if
+  it is inferred from observations or agent-owned events, not read from backend
+  simulator state.
 
 Teacher diagnostics may be used for labels and evaluation, but not as deployable actor inputs.

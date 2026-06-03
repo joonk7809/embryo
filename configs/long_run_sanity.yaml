@@ -1,0 +1,25 @@
+runtime:
+  name: fixture_memory
+  split: dev
+  seed_start: 10000
+  seed_count: 8
+
+protocol:
+  horizons: [256, 2048]
+  max_episodes_per_seed: 1
+
+arms:
+  - no_memory
+  - query_memory_clean
+  - query_memory_shuffled
+  - query_memory_stale
+  - query_memory_wrong_binding
+  - random_valid_action
+
+metrics:
+  survival: true
+  valid_actions: true
+  loop_rate: true
+  event_self_trigger: true
+  memory_grounded_score: true
+  contamination: true

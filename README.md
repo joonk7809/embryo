@@ -48,12 +48,15 @@ We enforce hard boundaries:
 
 - reward
 - done flags
-- inventory
+- privileged backend inventory
 - semantic maps
 - player position
 - achievements
 - seed/source metadata
 - backend simulator state
+
+Deployable inventory belief inferred from observations or agent-owned events is
+a future memory surface, not a privileged actor input.
 
 Validated against no-memory, shuffled, stale, and wrong-binding controls.
 

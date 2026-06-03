@@ -18,10 +18,12 @@ Forbidden actor/query/router inputs include:
 - rewards
 - done or discount flags
 - semantic maps
-- inventory
+- privileged backend inventory
 - player position
 - achievements
 - source metadata
 - backend internals
 
 Teacher diagnostics can be used for labels and evaluation, but never as deployable actor inputs.
+Deployable inventory belief may be added as a memory surface only when it is
+inferred from observations or agent-owned events rather than backend state.

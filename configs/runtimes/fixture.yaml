@@ -1,0 +1,7 @@
+runtime:
+  name: fixture_memory
+  suite: fixture
+  steps: 4
+  optional_dependency: null
+  trace_output: runs/runtime_collect/fixture_trace.jsonl
+  feature_output: runs/runtime_collect/fixture_features.jsonl

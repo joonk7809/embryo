@@ -1,0 +1,6 @@
+{"route_mode":"resource","target_action":"move_forward"}
+{"route_mode":"resource","target_action":"move_forward"}
+{"route_mode":"event_fallback","target_action":"turn_left"}
+{"route_mode":"event_fallback","target_action":"turn_left"}
+{"route_mode":"hold","target_action":"noop"}
+{"route_mode":"hold","target_action":"noop"}

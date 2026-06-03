@@ -1,0 +1,7 @@
+include: crafter_memory.yaml
+train:
+  module: fact_writer
+  enabled: true
+  input: data/fixtures/tiny_fact_writer_dataset.jsonl
+  output: runs/train_fact_writer_reference
+  note: "Reference scaffold; real learned training can reuse the same manifest boundary."

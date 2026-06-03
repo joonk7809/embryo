@@ -1,0 +1,10 @@
+include: crafter_memory.yaml
+replay:
+  arms:
+    - clean
+    - no_memory
+    - shuffled
+    - stale
+    - wrong_binding
+  episodes_per_arm: 2
+  max_steps: 64

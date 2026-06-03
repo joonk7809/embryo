@@ -1,0 +1,5 @@
+{
+  "contract": "crafter_memory_v1",
+  "allowed_actor_inputs": ["raw_rgb_frame", "previous_action", "facing_candidate_v1"],
+  "forbidden_actor_inputs": ["reward", "done", "info.semantic", "info.inventory"]
+}

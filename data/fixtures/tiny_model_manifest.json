@@ -1,0 +1,15 @@
+{
+  "artifact_paths": {},
+  "feature_schema": [
+    "candidate_score"
+  ],
+  "metadata": {
+    "parameters": {
+      "feature_name": "candidate_score",
+      "threshold": 0.5
+    }
+  },
+  "model_name": "tiny_reference_writer",
+  "model_type": "threshold_fact_writer",
+  "version": "1"
+}

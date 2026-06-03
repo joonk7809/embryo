@@ -1,0 +1,7 @@
+include: crafter_memory.yaml
+train:
+  module: bc_policy
+  enabled: true
+  input: data/fixtures/tiny_bc_dataset.jsonl
+  output: runs/train_bc_reference
+  note: "Reference scaffold; real BC training can reuse the same manifest boundary."

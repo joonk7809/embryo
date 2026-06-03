@@ -1,0 +1,7 @@
+include: crafter_memory.yaml
+train:
+  module: router
+  enabled: true
+  input: data/fixtures/tiny_router_dataset.jsonl
+  output: runs/train_router_reference
+  note: "Reference scaffold; validates the frozen router contract."

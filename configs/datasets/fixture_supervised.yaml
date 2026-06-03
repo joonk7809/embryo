@@ -1,0 +1,8 @@
+dataset:
+  input: data/fixtures/tiny_replay_features.jsonl
+  output: runs/fixture_supervised_datasets
+  source: fixture
+  modules:
+    - fact_writer
+    - router
+    - bc_policy

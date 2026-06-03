@@ -1,0 +1,7 @@
+runtime:
+  name: crafter_memory
+  suite: crafter
+  steps: 256
+  optional_dependency: crafter
+  trace_output: runs/runtime_collect/crafter_trace.jsonl
+  feature_output: runs/runtime_collect/crafter_features.jsonl

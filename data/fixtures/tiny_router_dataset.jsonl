@@ -1,0 +1,6 @@
+{"cache_age":0,"failed_action_event":true,"facing_candidate":true,"invalidated":false,"repeat_count":0,"target_route":"resource"}
+{"cache_age":1,"failed_action_event":false,"facing_candidate":true,"invalidated":false,"repeat_count":0,"target_route":"resource"}
+{"cache_age":0,"failed_action_event":true,"facing_candidate":false,"invalidated":false,"repeat_count":0,"target_route":"event_fallback"}
+{"cache_age":0,"failed_action_event":false,"facing_candidate":false,"invalidated":false,"repeat_count":3,"target_route":"event_fallback"}
+{"cache_age":9,"failed_action_event":false,"facing_candidate":true,"invalidated":true,"repeat_count":0,"target_route":"hold"}
+{"cache_age":0,"failed_action_event":false,"facing_candidate":false,"invalidated":false,"repeat_count":0,"target_route":"hold"}

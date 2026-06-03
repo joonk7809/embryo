@@ -1,0 +1,5 @@
+include: base.yaml
+smoke:
+  enabled: true
+  require_crafter: false
+  steps: 4

@@ -1,0 +1,5 @@
+{"action":"right","arm":"clean","diagnostic_progress_delta_teacher_only":0.0,"episode_id":"e1","resource_memory_critical":true,"resource_route_preserved":true,"seed":1,"tick":0}
+{"action":"right","arm":"clean","diagnostic_progress_delta_teacher_only":2.0,"episode_id":"e1","resource_memory_critical":true,"resource_route_preserved":true,"seed":1,"tick":1}
+{"action":"left","arm":"wrong_binding","diagnostic_progress_delta_teacher_only":0.0,"episode_id":"e1","resource_memory_critical":true,"seed":1,"tick":0}
+{"action":"left","arm":"wrong_binding","diagnostic_progress_delta_teacher_only":0.2,"episode_id":"e1","resource_memory_critical":true,"seed":1,"tick":1}
+{"action":"noop","arm":"no_memory","diagnostic_progress_delta_teacher_only":0.0,"episode_id":"e1","resource_memory_critical":true,"repeated_action_loop":true,"seed":1,"tick":0}

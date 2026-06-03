@@ -1,0 +1,10 @@
+project: embryo
+version: 0.1.0
+seed: 0
+run:
+  logdir: runs/{timestamp}
+  trace_detail: summary
+contract:
+  name: crafter_memory_v1
+  claim_boundary: diagnostic_closed_loop_replay
+  forbid_privileged_actor_inputs: true

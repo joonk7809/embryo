@@ -1,0 +1,11 @@
+include: crafter_memory.yaml
+replay:
+  arms:
+    - clean
+    - no_memory
+    - shuffled
+    - stale
+    - wrong_binding
+  stack_manifest: runs/reference_stack/stack_manifest.json
+  input: data/fixtures/tiny_replay_features.jsonl
+  output: runs/manifest_stack_replay

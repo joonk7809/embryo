@@ -1,0 +1,11 @@
+include: base.yaml
+runtime:
+  name: crafter_memory
+  suite: crafter
+memory:
+  sparse_fact: facing_candidate_v1
+  router: event_failed_action_fallback_cooldown
+  stale_repair: short_ttl_stale_control
+score:
+  name: memory_grounded_score
+  windows: [4, 8, 16]

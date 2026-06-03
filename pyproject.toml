@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "embryo"
+version = "0.1.0"
+description = "A compact embodied-agent memory testbed."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "Apache-2.0" }
+authors = [
+  { name = "Embryo contributors" },
+]
+classifiers = [
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+]
+dependencies = [
+  "numpy>=1.24",
+  "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+crafter = ["crafter>=1.8.3"]
+torch = ["torch>=2.0"]
+test = ["pytest>=8.0"]
+dev = ["pytest>=8.0", "ruff>=0.5"]
+
+[project.scripts]
+embryo-collect = "embryo.run.collect:main"
+embryo-build-datasets = "embryo.datasets.builders:main"
+embryo-evaluate = "embryo.run.evaluate:main"
+embryo-replay = "embryo.run.replay:main"
+embryo-assemble-stack = "embryo.models.stack:main"
+embryo-train-supervised = "embryo.run.train_supervised:main"
+embryo-supervised-memory-pipeline = "embryo.pipelines.supervised_memory:main"
+embryo-check-release = "embryo.run.release_check:main"
+
+[tool.setuptools.packages.find]
+include = ["embryo*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

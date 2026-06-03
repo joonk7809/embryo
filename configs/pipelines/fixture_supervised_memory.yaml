@@ -1,0 +1,11 @@
+pipeline:
+  runtime: fixture_memory
+  steps: 4
+  seed: 0
+  output: runs/supervised_memory_pipeline_fixture
+  replay_arms:
+    - clean
+    - no_memory
+    - shuffled
+    - stale
+    - wrong_binding

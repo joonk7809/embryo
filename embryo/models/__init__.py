@@ -9,7 +9,15 @@ from embryo.models.checkpoints import (
     save_manifest,
     validate_manifest,
 )
-from embryo.models.fact_writer import FactWriterOutput, ThresholdFactWriter, VisualFactWriter
+from embryo.models.fact_writer import (
+    FactWriterOutput,
+    LearnedFactWriterV0,
+    ThresholdFactWriter,
+    VisualFactWriter,
+    load_fact_writer_checkpoint,
+    save_fact_writer_checkpoint,
+    train_learned_fact_writer_v0,
+)
 from embryo.models.router import RouterModel, RouterOutput, RuleRouterModel
 from embryo.models.stack import (
     StackManifest,
@@ -24,6 +32,7 @@ __all__ = [
     "BCPolicy",
     "CheckpointManifest",
     "FactWriterOutput",
+    "LearnedFactWriterV0",
     "RouteBCPolicy",
     "RouterModel",
     "RouterOutput",
@@ -34,11 +43,14 @@ __all__ = [
     "assemble_stack_manifest",
     "build_model_from_manifest",
     "build_stack_from_manifest",
+    "load_fact_writer_checkpoint",
     "load_checkpoint_manifest",
     "load_manifest",
     "load_stack_manifest",
     "save_manifest",
+    "save_fact_writer_checkpoint",
     "save_stack_manifest",
+    "train_learned_fact_writer_v0",
     "validate_manifest",
     "validate_stack_manifest",
 ]

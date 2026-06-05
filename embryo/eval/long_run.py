@@ -8,6 +8,8 @@ the artifact schema.
 from __future__ import annotations
 
 import math
+import hashlib
+import json
 from collections import Counter, defaultdict
 from collections.abc import Mapping, Sequence
 from typing import Any
@@ -20,12 +22,17 @@ NO_GO_PROTOCOL_ARTIFACT_FAILURE = "NO_GO_protocol_artifact_failure"
 NO_GO_CONTAMINATION_FAILURE = "NO_GO_contamination_failure"
 NOT_EVALUABLE_NO_MEMORY_ANCHORS = "NOT_EVALUABLE_no_memory_anchors"
 NOT_EVALUABLE_RUNTIME_UNAVAILABLE = "NOT_EVALUABLE_runtime_unavailable"
+GO_MEMORY_EVALUABLE_SEED_BLOCK = "GO_memory_evaluable_seed_block"
+NOT_EVALUABLE_INSUFFICIENT_ANCHOR_COVERAGE = "NOT_EVALUABLE_insufficient_anchor_coverage"
 
 FORWARD_CLEAN_ARM = "query_memory_clean"
-FORWARD_CONTROL_ARMS = (
+FORWARD_CORRUPTED_CONTROL_ARMS = (
     "query_memory_wrong_binding",
     "query_memory_shuffled",
     "query_memory_stale",
+)
+FORWARD_CONTROL_ARMS = (
+    *FORWARD_CORRUPTED_CONTROL_ARMS,
     "no_memory",
 )
 
@@ -76,6 +83,11 @@ def episode_metrics(*, actor: Mapping[str, Any], ticks: Sequence[Mapping[str, An
             bool_rate(nested(row, "metrics", "event_self_triggered", False) for row in ticks),
             4,
         ),
+        "memory_anchor_count": sum(int(bool(nested(row, "metrics", "memory_anchor_critical", False))) for row in ticks),
+        "query_used_cached_fact_rate": round(
+            bool_rate(nested(row, "metrics", "query_used_cached_fact", False) for row in ticks),
+            4,
+        ),
         "contamination_failure_count": sum(int(nested(row, "contamination", "failure_count", 0)) for row in ticks),
     }
 
@@ -118,23 +130,31 @@ def summarize_long_run_protocol(
     contamination: Mapping[str, Any],
     runtime_unavailable: Mapping[str, Any] | None = None,
     artifact_failure: bool = False,
+    deterministic_replay: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build the top-level long-run summary."""
     memory = memory_grounded_protocol_score(ticks, enabled=metrics_enabled(protocol_manifest, "memory_grounded_score"))
+    coverage = anchor_coverage_summary(ticks, protocol_manifest=protocol_manifest)
+    determinism = dict(deterministic_replay or {"enabled": False, "passed": None})
+    memory_evaluability = memory_evaluability_decision(coverage)
     decision = decision_from_protocol(
         contamination=contamination,
         memory=memory,
         runtime_unavailable=runtime_unavailable,
         artifact_failure=artifact_failure,
+        deterministic_replay=determinism,
     )
     return {
         "decision": decision,
+        "memory_evaluability_decision": memory_evaluability,
         "protocol": public_protocol_summary(protocol_manifest),
         "episode_count": len(episodes),
         "tick_count": len(ticks),
         "summary_by_arm": summarize_by_key(episodes, "arm"),
         "summary_by_horizon": summarize_by_key(episodes, "horizon"),
         "memory_grounded_score": memory,
+        "anchor_coverage": coverage,
+        "deterministic_replay": determinism,
         "contamination": dict(contamination),
         "runtime_unavailable": runtime_unavailable,
         "artifact_failure": bool(artifact_failure),
@@ -174,6 +194,11 @@ def memory_score_rows(ticks: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]
         if arm not in {FORWARD_CLEAN_ARM, *FORWARD_CONTROL_ARMS}:
             continue
         action = str(actor.get("action", ""))
+        progress = metrics.get("memory_followthrough_delta")
+        if progress is None:
+            progress = eval_only.get("reward_delta_eval_only", 0.0)
+        anchor_critical = bool(metrics.get("resource_memory_critical", False) or metrics.get("memory_anchor_critical", False))
+        route_preserved = bool(metrics.get("resource_route_preserved", False) or metrics.get("memory_anchor_critical", False))
         rows.append(
             {
                 "arm": arm,
@@ -186,12 +211,17 @@ def memory_score_rows(ticks: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]
                     "action_name": action,
                     "invalid_or_unknown": bool(metrics.get("invalid_or_unknown_action", False)),
                 },
-                "resource_memory_critical": bool(metrics.get("resource_memory_critical", False)),
-                "resource_route_preserved": bool(metrics.get("resource_route_preserved", False)),
+                "resource_memory_critical": anchor_critical,
+                "resource_route_preserved": route_preserved,
+                "memory_anchor_critical": bool(metrics.get("memory_anchor_critical", False)),
+                "anchor_family": str(metrics.get("anchor_family", "")),
+                "anchor_fact_age": int(metrics.get("anchor_fact_age", 0)),
+                "anchor_currently_visible": bool(metrics.get("anchor_currently_visible", False)),
+                "query_used_cached_fact": bool(metrics.get("query_used_cached_fact", False)),
                 "fallback_triggered": bool(metrics.get("fallback_triggered", False)),
                 "event_self_triggered": bool(metrics.get("event_self_triggered", False)),
                 "repeated_action_loop": bool(metrics.get("repeated_action_loop", False)),
-                "diagnostic_progress_delta_teacher_only": numeric(eval_only.get("reward_delta_eval_only", 0.0)),
+                "diagnostic_progress_delta_teacher_only": numeric(progress),
                 "action_entropy_proxy": numeric(metrics.get("action_entropy_proxy", 0.0)),
                 "exploration_bin": metrics.get("exploration_bin"),
             }
@@ -211,6 +241,156 @@ def contamination_summary(ticks: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         "failure_count": len(failures),
         "failures": [dict(item) for item in failures],
     }
+
+
+def anchor_coverage_summary(
+    ticks: Sequence[Mapping[str, Any]],
+    *,
+    protocol_manifest: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Summarize whether the seed block creates fair memory-anchor tests."""
+    rows = [row for row in ticks if isinstance(row.get("actor", {}), Mapping) and isinstance(row.get("metrics", {}), Mapping)]
+    by_key = {
+        (
+            str(row["actor"].get("arm", "")),
+            int(row["actor"].get("seed", 0)),
+            str(row["actor"].get("episode_id", row["actor"].get("episode_index", "0"))),
+            int(row["actor"].get("tick", 0)),
+        ): row
+        for row in rows
+    }
+    seeds = configured_seeds(protocol_manifest, rows)
+    per_seed = {
+        int(seed): {
+            "all_arm_anchor_opportunity_count": 0,
+            "clean_arm_anchor_opportunity_count": 0,
+            "cached_anchor_use_count": 0,
+            "evaluable_anchor_count": 0,
+        }
+        for seed in seeds
+    }
+    requirements = anchor_coverage_requirements(protocol_manifest)
+    all_arm_anchor_opportunity_count = 0
+    clean_arm_anchor_opportunity_count = 0
+    cached_anchor_use_count = 0
+    evaluable_anchor_count = 0
+    for row in rows:
+        actor = row["actor"]
+        metrics = row["metrics"]
+        seed = int(actor.get("seed", 0))
+        arm = str(actor.get("arm", ""))
+        per_seed.setdefault(
+            seed,
+            {
+                "all_arm_anchor_opportunity_count": 0,
+                "clean_arm_anchor_opportunity_count": 0,
+                "cached_anchor_use_count": 0,
+                "evaluable_anchor_count": 0,
+            },
+        )
+        anchor_opportunity = bool(metrics.get("anchor_currently_visible", False) or metrics.get("resource_memory_critical", False))
+        if anchor_opportunity:
+            all_arm_anchor_opportunity_count += 1
+            per_seed[seed]["all_arm_anchor_opportunity_count"] += 1
+        if arm != FORWARD_CLEAN_ARM:
+            continue
+        if anchor_opportunity:
+            clean_arm_anchor_opportunity_count += 1
+            per_seed[seed]["clean_arm_anchor_opportunity_count"] += 1
+        cached_anchor_use = bool(metrics.get("query_used_cached_fact", False))
+        if cached_anchor_use:
+            cached_anchor_use_count += 1
+            per_seed[seed]["cached_anchor_use_count"] += 1
+        if cached_anchor_use and controls_are_comparable(by_key, actor, FORWARD_CORRUPTED_CONTROL_ARMS):
+            evaluable_anchor_count += 1
+            per_seed[seed]["evaluable_anchor_count"] += 1
+    evaluable_seeds = [seed for seed, row in per_seed.items() if int(row["evaluable_anchor_count"]) > 0]
+    seed_count = len(per_seed)
+    return {
+        "all_arm_anchor_opportunity_count": all_arm_anchor_opportunity_count,
+        "clean_arm_anchor_opportunity_count": clean_arm_anchor_opportunity_count,
+        "cached_anchor_use_count": cached_anchor_use_count,
+        "evaluable_anchor_count": evaluable_anchor_count,
+        "evaluable_seed_count": len(evaluable_seeds),
+        "evaluable_seed_rate": round(len(evaluable_seeds) / seed_count, 4) if seed_count else 0.0,
+        "seed_count": seed_count,
+        "requirements": requirements,
+        "per_seed": {str(seed): row for seed, row in sorted(per_seed.items())},
+    }
+
+
+def anchor_coverage_requirements(protocol_manifest: Mapping[str, Any]) -> dict[str, Any]:
+    protocol = protocol_manifest.get("protocol", {})
+    protocol = protocol if isinstance(protocol, Mapping) else {}
+    return {
+        "min_evaluable_anchor_count": int(protocol.get("min_evaluable_anchor_count", 1)),
+        "min_evaluable_seed_rate": float(protocol.get("min_evaluable_seed_rate", 0.5)),
+    }
+
+
+def configured_seeds(protocol_manifest: Mapping[str, Any], rows: Sequence[Mapping[str, Any]]) -> list[int]:
+    runtime = protocol_manifest.get("runtime", {})
+    if isinstance(runtime, Mapping) and runtime.get("seeds"):
+        return [int(seed) for seed in runtime["seeds"]]
+    return sorted({int(row["actor"].get("seed", 0)) for row in rows})
+
+
+def controls_are_comparable(
+    by_key: Mapping[tuple[str, int, str, int], Mapping[str, Any]],
+    actor: Mapping[str, Any],
+    control_arms: Sequence[str] = FORWARD_CONTROL_ARMS,
+) -> bool:
+    seed = int(actor.get("seed", 0))
+    episode = str(actor.get("episode_id", actor.get("episode_index", "0")))
+    tick = int(actor.get("tick", 0))
+    return all((arm, seed, episode, tick) in by_key for arm in control_arms)
+
+
+def memory_evaluability_decision(coverage: Mapping[str, Any]) -> str:
+    requirements = coverage.get("requirements", {})
+    requirements = requirements if isinstance(requirements, Mapping) else {}
+    if int(coverage.get("evaluable_anchor_count", 0)) < int(requirements.get("min_evaluable_anchor_count", 1)):
+        return NOT_EVALUABLE_INSUFFICIENT_ANCHOR_COVERAGE
+    if float(coverage.get("evaluable_seed_rate", 0.0)) < float(requirements.get("min_evaluable_seed_rate", 0.5)):
+        return NOT_EVALUABLE_INSUFFICIENT_ANCHOR_COVERAGE
+    return GO_MEMORY_EVALUABLE_SEED_BLOCK
+
+
+def deterministic_replay_summary_from_digest(
+    primary_ticks: Sequence[Mapping[str, Any]],
+    *,
+    repeat_digest: str,
+    repeat_tick_count: int,
+    enabled: bool = True,
+    error: str | None = None,
+) -> dict[str, Any]:
+    primary_digest = replay_digest(primary_ticks)
+    passed = primary_digest == repeat_digest and len(primary_ticks) == int(repeat_tick_count)
+    return {
+        "enabled": bool(enabled),
+        "mode": "fresh_process",
+        "digest_scope": "full_tick",
+        "passed": False if error else passed,
+        "primary_digest": primary_digest,
+        "repeat_digest": repeat_digest,
+        "primary_tick_count": len(primary_ticks),
+        "repeat_tick_count": int(repeat_tick_count),
+        "error": error,
+    }
+
+
+def replay_digest(ticks: Sequence[Mapping[str, Any]]) -> str:
+    payload = [
+        {
+            "actor": row.get("actor", {}),
+            "metrics": row.get("metrics", {}),
+            "eval_only": row.get("eval_only", {}),
+            "contamination": row.get("contamination", {}),
+        }
+        for row in ticks
+    ]
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha1(encoded.encode("utf-8")).hexdigest()
 
 
 def combine_contamination(episodes: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
@@ -233,15 +413,16 @@ def decision_from_protocol(
     memory: Mapping[str, Any],
     runtime_unavailable: Mapping[str, Any] | None,
     artifact_failure: bool,
+    deterministic_replay: Mapping[str, Any],
 ) -> str:
     if runtime_unavailable:
         return NOT_EVALUABLE_RUNTIME_UNAVAILABLE
     if artifact_failure:
         return NO_GO_PROTOCOL_ARTIFACT_FAILURE
+    if deterministic_replay.get("enabled") and deterministic_replay.get("passed") is False:
+        return NO_GO_PROTOCOL_ARTIFACT_FAILURE
     if int(contamination.get("failure_count", 0)) > 0:
         return NO_GO_CONTAMINATION_FAILURE
-    if memory.get("enabled") and memory.get("status") == NOT_EVALUABLE_NO_MEMORY_ANCHORS:
-        return NOT_EVALUABLE_NO_MEMORY_ANCHORS
     return GO_LONG_RUN_PROTOCOL_SUPPORTED
 
 
@@ -265,6 +446,8 @@ def aggregate_episodes(episodes: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         "mean_invalid_or_unknown_action_rate": round(mean(row.get("invalid_or_unknown_action_rate") for row in metrics), 4),
         "mean_repeated_action_loop_rate": round(mean(row.get("repeated_action_loop_rate") for row in metrics), 4),
         "mean_event_self_trigger_rate": round(mean(row.get("event_self_trigger_rate") for row in metrics), 4),
+        "memory_anchor_count": sum(int(row.get("memory_anchor_count", 0)) for row in metrics),
+        "mean_query_used_cached_fact_rate": round(mean(row.get("query_used_cached_fact_rate") for row in metrics), 4),
         "mean_action_entropy_proxy": round(mean(row.get("action_entropy_proxy") for row in metrics), 4),
         "reward_sum_eval_only": round(sum(numeric(row.get("reward_sum_eval_only")) for row in eval_rows), 4),
         "contamination_failure_count": sum(int(row.get("contamination_failure_count", 0)) for row in metrics),
@@ -278,11 +461,14 @@ def format_long_run_summary_markdown(summary: Mapping[str, Any]) -> str:
         "# Long-Run Protocol Summary",
         "",
         f"- Decision: `{summary.get('decision')}`",
+        f"- Memory evaluability: `{summary.get('memory_evaluability_decision')}`",
         f"- Runtime: `{protocol.get('runtime')}`",
         f"- Split: `{protocol.get('split')}`",
+        f"- Fact surface: `{protocol.get('fact_surface')}`",
         f"- Horizons: `{protocol.get('horizons')}`",
         f"- Episode count: `{summary.get('episode_count')}`",
         f"- Tick count: `{summary.get('tick_count')}`",
+        f"- Deterministic replay: `{determinism_status(summary.get('deterministic_replay'))}`",
         "",
         "## Arms",
         "",
@@ -324,14 +510,31 @@ def format_long_run_summary_markdown(summary: Mapping[str, Any]) -> str:
             "",
         ]
     )
+    coverage = summary.get("anchor_coverage", {})
+    coverage = coverage if isinstance(coverage, Mapping) else {}
+    lines.extend(
+        [
+            "## Anchor Coverage",
+            "",
+            f"- All-arm anchor opportunities: `{coverage.get('all_arm_anchor_opportunity_count')}`",
+            f"- Clean-arm anchor opportunities: `{coverage.get('clean_arm_anchor_opportunity_count')}`",
+            f"- Cached anchor uses: `{coverage.get('cached_anchor_use_count')}`",
+            f"- Evaluable anchors: `{coverage.get('evaluable_anchor_count')}`",
+            f"- Evaluable seed rate: `{coverage.get('evaluable_seed_rate')}`",
+            f"- Coverage requirements: `{coverage.get('requirements')}`",
+            "",
+        ]
+    )
     return "\n".join(lines) + "\n"
 
 
 def public_protocol_summary(protocol_manifest: Mapping[str, Any]) -> dict[str, Any]:
     runtime = protocol_manifest.get("runtime", {})
     protocol = protocol_manifest.get("protocol", {})
+    fact_surface = protocol_manifest.get("fact_surface", {})
     runtime = runtime if isinstance(runtime, Mapping) else {}
     protocol = protocol if isinstance(protocol, Mapping) else {}
+    fact_surface = fact_surface if isinstance(fact_surface, Mapping) else {}
     return {
         "runtime": runtime.get("name"),
         "split": runtime.get("split"),
@@ -340,8 +543,26 @@ def public_protocol_summary(protocol_manifest: Mapping[str, Any]) -> dict[str, A
         "seeds": runtime.get("seeds"),
         "horizons": protocol.get("horizons"),
         "max_episodes_per_seed": protocol.get("max_episodes_per_seed"),
+        "determinism_check": protocol.get("determinism_check"),
+        "min_evaluable_anchor_count": protocol.get("min_evaluable_anchor_count"),
+        "min_evaluable_seed_rate": protocol.get("min_evaluable_seed_rate"),
+        "deterministic_backend_patch": runtime.get("deterministic_backend_patch"),
+        "backend_determinism_patch": runtime.get("backend_determinism_patch"),
+        "fact_surface": fact_surface.get("name"),
+        "fact_surface_checkpoint": fact_surface.get("checkpoint"),
+        "fact_surface_threshold": fact_surface.get("threshold"),
         "arms": protocol_manifest.get("arms", ()),
     }
+
+
+def determinism_status(value: Any) -> str:
+    if not isinstance(value, Mapping):
+        return "disabled"
+    mode = value.get("mode", "unknown")
+    passed = value.get("passed")
+    if passed is None:
+        return f"{mode}: not_checked"
+    return f"{mode}: {'passed' if passed else 'failed'}"
 
 
 def metrics_enabled(protocol_manifest: Mapping[str, Any], key: str) -> bool:

@@ -1,0 +1,51 @@
+runtime:
+  name: crafter_memory
+  deterministic_backend_patch: true
+
+splits:
+  train:
+    seed_start: 10000
+    seed_count: 32
+  dev:
+    seed_start: 11000
+    seed_count: 16
+  test:
+    seed_start: 12000
+    seed_count: 16
+
+collection:
+  steps_per_seed: 128
+  action_vocabulary:
+    - noop
+    - move_left
+    - move_right
+    - move_up
+    - move_down
+    - move_forward
+    - turn_left
+    - do
+    - sleep
+
+labels:
+  salience_threshold: 0.5
+  min_rgb_delta: 0.0
+  center_vs_global_contrast_threshold: 0.05
+
+training:
+  epochs: 500
+  learning_rate: 0.2
+  l2: 0.0001
+  ridge: 0.0001
+
+decision:
+  min_test_f1: 0.70
+  max_train_test_f1_gap: 0.15
+  max_dev_test_f1_gap: 0.15
+  min_predicted_positive_rate: 0.02
+  max_predicted_positive_rate: 0.80
+  min_label_positive_rate: 0.05
+  max_label_positive_rate: 0.80
+  min_test_positive_count: 50
+
+output:
+  path: runs/fact_writer_sanity

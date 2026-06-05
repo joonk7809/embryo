@@ -101,6 +101,13 @@ def build_model_from_manifest(manifest: CheckpointManifest | Mapping[str, Any]):
         from embryo.models.fact_writer import ThresholdFactWriter
 
         return ThresholdFactWriter(**params)
+    if parsed.model_type == "learned_fact_writer_v0":
+        from embryo.models.fact_writer import load_fact_writer_checkpoint
+
+        checkpoint = parsed.artifact_paths.get("weights", "")
+        if not checkpoint:
+            raise ValueError("learned_fact_writer_v0 manifest requires artifact_paths.weights")
+        return load_fact_writer_checkpoint(checkpoint)
     if parsed.model_type == "rule_router":
         from embryo.models.router import RuleRouterModel
 

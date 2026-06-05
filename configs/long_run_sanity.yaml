@@ -7,6 +7,10 @@ runtime:
 protocol:
   horizons: [256, 2048]
   max_episodes_per_seed: 1
+  min_evaluable_seed_rate: 0.5
+
+fact_surface:
+  name: reference_rgb_scaffold
 
 arms:
   - no_memory
@@ -15,11 +19,4 @@ arms:
   - query_memory_stale
   - query_memory_wrong_binding
   - random_valid_action
-
-metrics:
-  survival: true
-  valid_actions: true
-  loop_rate: true
-  event_self_trigger: true
-  memory_grounded_score: true
-  contamination: true
+  - reference_exploration_sweep

@@ -12,7 +12,17 @@ from embryo.runtimes.registry import register_runtime
 FIXTURE_SPEC = RuntimeSpec(
     name="fixture_memory",
     suite="fixture",
-    observation_keys=("raw_rgb_frame", "previous_action", "candidate_score", "failed_action_event"),
+    observation_keys=(
+        "raw_rgb_frame",
+        "previous_rgb_frame",
+        "previous_action",
+        "candidate_score",
+        "center_salience_score",
+        "center_patch_hash",
+        "visual_anchor_visible",
+        "visual_anchor_family",
+        "failed_action_event",
+    ),
     action_names=("noop", "move_forward", "turn_left"),
     noop_action="noop",
     resource_action="move_forward",
@@ -59,11 +69,17 @@ class FixtureRuntime:
 
     def _observation(self, *, seed: int | None = None) -> dict[str, object]:
         _ = seed
+        visible = self._tick <= 1
+        salience = self._candidate_score() if visible else 0.0
         return {
             "raw_rgb_frame": f"fixture_rgb_{self._tick}",
             "previous_rgb_frame": f"fixture_rgb_{max(0, self._tick - 1)}",
             "previous_action": self._previous_action,
             "candidate_score": self._candidate_score(),
+            "center_salience_score": salience,
+            "center_patch_hash": "fixture_anchor_a" if visible else "",
+            "visual_anchor_visible": visible,
+            "visual_anchor_family": "fixture_visual_anchor_v1",
             "failed_action_event": self._previous_action == "move_forward" and self._candidate_score() < 0.5,
             "tick": self._tick,
         }

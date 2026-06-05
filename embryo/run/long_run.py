@@ -4,14 +4,10 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
-import random
-from collections import deque
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from embryo.eval.contamination import scan_actor_context
 from embryo.eval.long_run import (
     NOT_EVALUABLE_RUNTIME_UNAVAILABLE,
     combine_contamination,
@@ -20,40 +16,59 @@ from embryo.eval.long_run import (
     summarize_long_run_protocol,
 )
 from embryo.eval.traces import write_jsonl
-from embryo.memory.freshness import FreshnessState
-from embryo.memory.queries import build_event_query, build_resource_query, combine_queries
-from embryo.models import RuleRouterModel, ThresholdFactWriter
+from embryo.run.long_run_arms import DEFAULT_ARMS, EpisodeState, action_is_valid, select_action_for_arm
+from embryo.run.long_run_config import CRAFTER_BACKEND_DETERMINISM_PATCH, resolve_protocol_manifest
+from embryo.run.long_run_fact_surface import load_fact_surface
+from embryo.run.long_run_replay import fresh_process_deterministic_replay_summary
+from embryo.run.long_run_rows import build_tick_row
 from embryo.runtimes import make_runtime
-from embryo.runtimes.base import RuntimeAdapter, RuntimeSpec
-
-
-DEFAULT_ARMS = (
-    "no_memory",
-    "query_memory_clean",
-    "query_memory_shuffled",
-    "query_memory_stale",
-    "query_memory_wrong_binding",
-    "random_valid_action",
-)
+from embryo.runtimes.base import RuntimeAdapter
 
 
 def run_long_run_protocol(config: Mapping[str, Any]) -> dict[str, Any]:
     """Run fixed-seed long-run episodes and return artifact payloads."""
     manifest = resolve_protocol_manifest(config)
+    primary = collect_long_run_pass(manifest)
+    deterministic_replay = {"enabled": False, "mode": "disabled", "passed": None}
+    if primary["runtime_unavailable"] is None:
+        deterministic_replay = fresh_process_deterministic_replay_summary(manifest, primary["ticks"])
+    contamination = combine_contamination(primary["episodes"])
+    summary = summarize_long_run_protocol(
+        protocol_manifest=manifest,
+        episodes=primary["episodes"],
+        ticks=primary["ticks"],
+        contamination=contamination,
+        runtime_unavailable=primary["runtime_unavailable"],
+        deterministic_replay=deterministic_replay,
+    )
+    detail_ticks = bool(manifest["protocol"].get("detail_ticks", False))
+    return {
+        "summary": summary,
+        "episodes": primary["episodes"],
+        "ticks": primary["ticks"] if detail_ticks else [],
+        "protocol_manifest": manifest,
+        "contamination": contamination,
+    }
+
+
+def collect_long_run_pass(manifest: Mapping[str, Any]) -> dict[str, Any]:
+    """Run one protocol pass. Reused for deterministic replay checks."""
     episodes: list[dict[str, Any]] = []
     ticks: list[dict[str, Any]] = []
     runtime_unavailable = None
 
     runtime_cfg = manifest["runtime"]
     protocol_cfg = manifest["protocol"]
+    fact_surface = load_fact_surface(manifest.get("fact_surface", {}), root=Path(__file__).resolve().parents[2])
     runtime_name = str(runtime_cfg["name"])
     split = str(runtime_cfg["split"])
-    detail_ticks = bool(protocol_cfg.get("detail_ticks", False))
 
     for horizon in protocol_cfg["horizons"]:
         for seed in runtime_cfg["seeds"]:
             for episode_index in range(int(protocol_cfg["max_episodes_per_seed"])):
                 for arm in manifest["arms"]:
+                    fact_surface_cfg = manifest.get("fact_surface", {})
+                    fact_surface_cfg = fact_surface_cfg if isinstance(fact_surface_cfg, Mapping) else {}
                     actor = {
                         "runtime": runtime_name,
                         "arm": str(arm),
@@ -62,9 +77,12 @@ def run_long_run_protocol(config: Mapping[str, Any]) -> dict[str, Any]:
                         "split": split,
                         "episode_index": int(episode_index),
                         "episode_id": episode_id(split=split, seed=int(seed), horizon=int(horizon), episode_index=int(episode_index)),
+                        "fact_surface": str(fact_surface_cfg.get("name", "reference_rgb_scaffold")),
+                        "fact_surface_checkpoint": fact_surface_cfg.get("checkpoint"),
+                        "fact_surface_threshold": fact_surface_cfg.get("threshold"),
                     }
                     try:
-                        episode_ticks = run_long_run_episode(actor=actor, runtime_name=runtime_name)
+                        episode_ticks = run_long_run_episode(actor=actor, runtime_config=runtime_cfg, fact_surface=fact_surface)
                     except Exception as exc:  # noqa: BLE001
                         if runtime_is_unavailable(exc):
                             runtime_unavailable = {"runtime": runtime_name, "reason": str(exc), "decision": NOT_EVALUABLE_RUNTIME_UNAVAILABLE}
@@ -82,26 +100,17 @@ def run_long_run_protocol(config: Mapping[str, Any]) -> dict[str, Any]:
         if runtime_unavailable:
             break
 
-    contamination = combine_contamination(episodes)
-    summary = summarize_long_run_protocol(
-        protocol_manifest=manifest,
-        episodes=episodes,
-        ticks=ticks,
-        contamination=contamination,
-        runtime_unavailable=runtime_unavailable,
-    )
-    return {
-        "summary": summary,
-        "episodes": episodes,
-        "ticks": ticks if detail_ticks else [],
-        "protocol_manifest": manifest,
-        "contamination": contamination,
-    }
+    return {"episodes": episodes, "ticks": ticks, "runtime_unavailable": runtime_unavailable}
 
 
-def run_long_run_episode(*, actor: Mapping[str, Any], runtime_name: str) -> list[dict[str, Any]]:
+def run_long_run_episode(*, actor: Mapping[str, Any], runtime_config: Mapping[str, Any], fact_surface: Any) -> list[dict[str, Any]]:
     horizon = int(actor["horizon"])
-    runtime = make_runtime_for_horizon(runtime_name, horizon=horizon)
+    runtime = make_runtime_for_horizon(
+        str(runtime_config["name"]),
+        horizon=horizon,
+        seed=int(actor["seed"]),
+        deterministic_backend_patch=runtime_config.get("deterministic_backend_patch"),
+    )
     try:
         current = runtime.reset(seed=int(actor["seed"]))
         state = EpisodeState(seed=int(actor["seed"]), arm=str(actor["arm"]), horizon=horizon)
@@ -109,13 +118,14 @@ def run_long_run_episode(*, actor: Mapping[str, Any], runtime_name: str) -> list
         for tick in range(horizon):
             if current.done:
                 break
-            decision = select_action_for_arm(runtime.spec, current.observation, state, str(actor["arm"]))
+            actor_observation = fact_surface.apply(current.observation)
+            decision = select_action_for_arm(runtime.spec, actor_observation, state, str(actor["arm"]))
             post_step = runtime.step(decision["action"])
             row = build_tick_row(
                 actor=actor,
                 tick=tick,
                 spec=runtime.spec,
-                pre_observation=current.observation,
+                pre_observation=actor_observation,
                 post_step=post_step,
                 decision=decision,
                 state=state,
@@ -130,288 +140,27 @@ def run_long_run_episode(*, actor: Mapping[str, Any], runtime_name: str) -> list
         runtime.close()
 
 
-class EpisodeState:
-    def __init__(self, *, seed: int, arm: str, horizon: int) -> None:
-        self.arm = arm
-        self.rng = random.Random(f"{seed}:{arm}:{horizon}")
-        self.previous_action: str | None = None
-        self.repeat_count = 0
-        self.last_route = "hold"
-        self.recent_actions: deque[str] = deque(maxlen=8)
-
-    def observe(self, action: str, route: str) -> None:
-        if action == self.previous_action:
-            self.repeat_count += 1
-        else:
-            self.repeat_count = 0
-        self.previous_action = action
-        self.last_route = route
-        self.recent_actions.append(action)
-
-
-def select_action_for_arm(spec: RuntimeSpec, observation: Mapping[str, Any], state: EpisodeState, arm: str) -> dict[str, Any]:
-    if arm == "no_memory":
-        action = spec.noop_action
-        return {
-            "action": action,
-            "route_mode": "no_memory",
-            "query_content_hash": "",
-            "cache_age": 0,
-            "resource_memory_critical": resource_memory_critical(observation),
-            "resource_route_preserved": False,
-            "fallback_triggered": False,
-            "event_self_triggered": False,
-            "repeated_action_loop": state.repeat_count >= 2,
-            "fact_value": False,
-            "invalid_or_unknown_action": not action_is_valid(spec, action),
-        }
-
-    if arm == "random_valid_action":
-        action = state.rng.choice(tuple(spec.action_names))
-        return {
-            "action": action,
-            "route_mode": "random_valid_action",
-            "query_content_hash": "",
-            "cache_age": 0,
-            "resource_memory_critical": resource_memory_critical(observation),
-            "resource_route_preserved": False,
-            "fallback_triggered": False,
-            "event_self_triggered": False,
-            "repeated_action_loop": state.repeat_count >= 2,
-            "fact_value": False,
-            "invalid_or_unknown_action": not action_is_valid(spec, action),
-        }
-
-    features = corrupt_features(deployable_features(observation, repeat_count=state.repeat_count, last_route=state.last_route), arm)
-    fact_writer = ThresholdFactWriter()
-    router = RuleRouterModel()
-    fact = fact_writer.fact(features)
-    freshness = FreshnessState(
-        cache_age=int(features.get("cache_age", 0)),
-        invalidated=bool(features.get("invalidated", False)),
-        visual_change_conflict=bool(features.get("visual_change_conflict", False)),
-    )
-    resource_query = build_resource_query([fact], cache_age=freshness.cache_age, fresh=not freshness.invalidated)
-    event_query = build_event_query([fact], cache_age=freshness.cache_age)
-    combined_query = combine_queries(resource_query, event_query)
-    router_output = router.predict(
-        {
-            "facing_candidate": bool(fact.value),
-            "failed_action_event": bool(features.get("failed_action_event", False)),
-            "cache_age": freshness.cache_age,
-            "invalidated": freshness.invalidated,
-            "visual_change_conflict": freshness.visual_change_conflict,
-            "cooldown": int(features.get("cooldown", 0)),
-            "repeat_count": int(features.get("repeat_count", 0)),
-            "last_route": str(features.get("last_route", "hold")),
-        }
-    )
-    action = action_for_route(spec, router_output.route_mode)
-    event_self_triggered = state.last_route == "event_fallback" and router_output.route_mode == "event_fallback" and not bool(
-        features.get("failed_action_event", False)
-    )
-    return {
-        "action": action,
-        "route_mode": router_output.route_mode,
-        "query_content_hash": combined_query.content_hash,
-        "cache_age": freshness.cache_age,
-        "resource_memory_critical": resource_memory_critical(observation),
-        "resource_route_preserved": bool(router_output.resource_route_preserved),
-        "fallback_triggered": bool(router_output.event_fallback_gate),
-        "event_self_triggered": bool(event_self_triggered),
-        "repeated_action_loop": state.repeat_count >= 2,
-        "fact_value": bool(fact.value),
-        "invalid_or_unknown_action": not action_is_valid(spec, action),
-    }
-
-
-def build_tick_row(
+def make_runtime_for_horizon(
+    runtime_name: str,
     *,
-    actor: Mapping[str, Any],
-    tick: int,
-    spec: RuntimeSpec,
-    pre_observation: Mapping[str, Any],
-    post_step: Any,
-    decision: Mapping[str, Any],
-    state: EpisodeState,
-) -> dict[str, Any]:
-    action = str(decision["action"])
-    actor_context = actor_context_from_decision(pre_observation, decision)
-    contamination = scan_actor_context(actor_context)
-    valid_action = action_is_valid(spec, action)
-    row_actor = dict(actor)
-    row_actor.update(
-        {
-            "tick": int(tick),
-            "action": action,
-            "route_mode": str(decision.get("route_mode", "")),
-        }
-    )
-    return {
-        "actor": row_actor,
-        "metrics": {
-            "valid_action": valid_action,
-            "invalid_or_unknown_action": bool(decision.get("invalid_or_unknown_action", False)) or not valid_action,
-            "repeated_action_loop": bool(decision.get("repeated_action_loop", False)),
-            "event_self_triggered": bool(decision.get("event_self_triggered", False)),
-            "resource_memory_critical": bool(decision.get("resource_memory_critical", False)),
-            "resource_route_preserved": bool(decision.get("resource_route_preserved", False)),
-            "fallback_triggered": bool(decision.get("fallback_triggered", False)),
-            "query_content_hash": str(decision.get("query_content_hash", "")),
-            "action_entropy_proxy": action_entropy_with_candidate(state.recent_actions, action),
-            "exploration_bin": exploration_bin(state.recent_actions, action),
-        },
-        "eval_only": eval_only_tick_fields(post_step),
-        "contamination": contamination,
-    }
-
-
-def deployable_features(observation: Mapping[str, Any], *, repeat_count: int, last_route: str) -> dict[str, Any]:
-    return {
-        "raw_rgb_frame": observation.get("raw_rgb_frame"),
-        "previous_rgb_frame": observation.get("previous_rgb_frame"),
-        "previous_action": observation.get("previous_action", "noop"),
-        "candidate_score": numeric(observation.get("candidate_score", 0.0)),
-        "failed_action_event": bool(observation.get("failed_action_event", False)),
-        "cache_age": int(observation.get("cache_age", 0) or 0),
-        "invalidated": bool(observation.get("invalidated", False)),
-        "visual_change_conflict": bool(observation.get("visual_change_conflict", False)),
-        "repeat_count": int(repeat_count),
-        "last_route": str(last_route),
-    }
-
-
-def corrupt_features(features: Mapping[str, Any], arm: str) -> dict[str, Any]:
-    row = dict(features)
-    score = numeric(row.get("candidate_score", 0.0))
-    if arm == "no_memory":
-        row.update(candidate_score=0.0, failed_action_event=False)
-    elif arm == "query_memory_clean":
-        pass
-    elif arm == "query_memory_shuffled":
-        row["candidate_score"] = 1.0 - score
-    elif arm == "query_memory_stale":
-        row.update(cache_age=max(99, int(row.get("cache_age", 0))), invalidated=True)
-    elif arm == "query_memory_wrong_binding":
-        row["candidate_score"] = 0.0 if score >= 0.5 else 1.0
-    else:
-        raise ValueError(f"Unknown long-run arm: {arm}")
-    return row
-
-
-def actor_context_from_decision(observation: Mapping[str, Any], decision: Mapping[str, Any]) -> dict[str, Any]:
-    return {
-        "raw_rgb_frame": observation.get("raw_rgb_frame", "<rgb_frame>"),
-        "previous_rgb_frame": observation.get("previous_rgb_frame", "<previous_rgb_frame>"),
-        "previous_action": observation.get("previous_action", "noop"),
-        "facing_candidate_v1": bool(decision.get("fact_value", False)),
-        "query_content": str(decision.get("query_content_hash", "")),
-        "query_content_hash": str(decision.get("query_content_hash", "")),
-        "query_cache_age": int(decision.get("cache_age", 0)),
-        "short_ttl_stale_state": str(decision.get("cache_age", 0)),
-    }
-
-
-def eval_only_tick_fields(step: Any) -> dict[str, Any]:
-    info = step.info if isinstance(step.info, Mapping) else {}
-    achievements = achievements_from_info(info)
-    return {
-        "reward_delta_eval_only": numeric(step.reward),
-        "done_eval_only": bool(step.done),
-        "death_cause_eval_only": death_cause_from_info(info, done=bool(step.done)),
-        "achievements_eval_only": achievements,
-        "health_eval_only": optional_numeric(info.get("health")),
-        "food_eval_only": optional_numeric(info.get("food")),
-        "drink_eval_only": optional_numeric(info.get("drink")),
-        "backend_inventory_eval_only": json_safe(info.get("inventory")) if "inventory" in info else None,
-    }
-
-
-def action_for_route(spec: RuntimeSpec, route: str) -> str:
-    if route == "resource":
-        return spec.resource_action
-    if route == "event_fallback":
-        return spec.fallback_action
-    return spec.noop_action
-
-
-def action_is_valid(spec: RuntimeSpec, action: str) -> bool:
-    return action in spec.action_names or action in spec.action_map
-
-
-def resource_memory_critical(observation: Mapping[str, Any]) -> bool:
-    if "resource_memory_critical" in observation:
-        return bool(observation["resource_memory_critical"])
-    return numeric(observation.get("candidate_score", 0.0)) >= 0.5
-
-
-def action_entropy_with_candidate(recent_actions: Sequence[str], action: str) -> float:
-    actions = [*recent_actions, action]
-    if len(set(actions)) <= 1:
-        return 0.0
-    counts = {item: actions.count(item) for item in set(actions)}
-    total = len(actions)
-    entropy = -sum((count / total) * math.log(count / total) for count in counts.values())
-    return round(entropy / math.log(len(counts)), 4)
-
-
-def exploration_bin(recent_actions: Sequence[str], action: str) -> int:
-    return min(4, int(action_entropy_with_candidate(recent_actions, action) * 5))
-
-
-def achievements_from_info(info: Mapping[str, Any]) -> list[str]:
-    raw = info.get("achievements", info.get("achievement"))
-    if isinstance(raw, Mapping):
-        return sorted(str(key) for key, value in raw.items() if bool(value))
-    if isinstance(raw, (list, tuple, set)):
-        return sorted(str(item) for item in raw if item is not None)
-    if raw:
-        return [str(raw)]
-    return []
-
-
-def death_cause_from_info(info: Mapping[str, Any], *, done: bool) -> str | None:
-    if not done:
-        return None
-    for key in ("death_cause", "death_reason", "cause_of_death"):
-        if info.get(key):
-            return str(info[key])
-    return None
-
-
-def optional_numeric(value: Any) -> float | None:
-    if value is None:
-        return None
-    return numeric(value)
-
-
-def numeric(value: Any) -> float:
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return 0.0
-
-
-def json_safe(value: Any) -> Any:
-    if isinstance(value, Mapping):
-        return {str(key): json_safe(inner) for key, inner in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [json_safe(item) for item in value]
-    if isinstance(value, (str, int, float, bool)) or value is None:
-        return value
-    if hasattr(value, "item"):
+    horizon: int,
+    seed: int | None = None,
+    deterministic_backend_patch: Any = None,
+) -> RuntimeAdapter:
+    for kwargs in (
+        {"max_steps": horizon, "seed": seed, "deterministic_backend_patch": deterministic_backend_patch},
+        {"max_steps": horizon, "seed": seed},
+        {"seed": seed, "deterministic_backend_patch": deterministic_backend_patch},
+        {"max_steps": horizon},
+        {"seed": seed},
+        {},
+    ):
+        clean_kwargs = {key: value for key, value in kwargs.items() if value is not None}
         try:
-            return value.item()
-        except Exception:  # noqa: BLE001
-            return str(value)
-    return str(value)
-
-
-def make_runtime_for_horizon(runtime_name: str, *, horizon: int) -> RuntimeAdapter:
-    try:
-        return make_runtime(runtime_name, max_steps=horizon)
-    except TypeError:
-        return make_runtime(runtime_name)
+            return make_runtime(runtime_name, **clean_kwargs)
+        except TypeError:
+            continue
+    return make_runtime(runtime_name)
 
 
 def runtime_is_unavailable(exc: Exception) -> bool:
@@ -421,45 +170,6 @@ def runtime_is_unavailable(exc: Exception) -> bool:
 
 def episode_id(*, split: str, seed: int, horizon: int, episode_index: int) -> str:
     return f"{split}:seed-{seed}:horizon-{horizon}:episode-{episode_index}"
-
-
-def resolve_protocol_manifest(config: Mapping[str, Any]) -> dict[str, Any]:
-    runtime = dict(config.get("runtime", {})) if isinstance(config.get("runtime", {}), Mapping) else {}
-    protocol = dict(config.get("protocol", {})) if isinstance(config.get("protocol", {}), Mapping) else {}
-    metrics = dict(config.get("metrics", {})) if isinstance(config.get("metrics", {}), Mapping) else {}
-    seed_start = int(runtime.get("seed_start", 10000))
-    seed_count = int(runtime.get("seed_count", 1))
-    seeds = tuple(int(seed) for seed in runtime.get("seeds", range(seed_start, seed_start + seed_count)))
-    runtime.update(
-        {
-            "name": str(runtime.get("name", "fixture_memory")),
-            "split": str(runtime.get("split", "dev")),
-            "seed_start": seed_start,
-            "seed_count": seed_count,
-            "seeds": list(seeds),
-        }
-    )
-    protocol.update(
-        {
-            "horizons": [int(value) for value in protocol.get("horizons", (256, 2048))],
-            "max_episodes_per_seed": int(protocol.get("max_episodes_per_seed", 1)),
-            "detail_ticks": bool(protocol.get("detail_ticks", False)),
-        }
-    )
-    arms = tuple(str(arm) for arm in config.get("arms", DEFAULT_ARMS))
-    return {
-        "runtime": runtime,
-        "protocol": protocol,
-        "arms": list(arms),
-        "metrics": {
-            "survival": bool(metrics.get("survival", True)),
-            "valid_actions": bool(metrics.get("valid_actions", True)),
-            "loop_rate": bool(metrics.get("loop_rate", True)),
-            "event_self_trigger": bool(metrics.get("event_self_trigger", True)),
-            "memory_grounded_score": bool(metrics.get("memory_grounded_score", True)),
-            "contamination": bool(metrics.get("contamination", True)),
-        },
-    }
 
 
 def write_long_run_artifacts(result: Mapping[str, Any], out: str | Path) -> dict[str, str]:
@@ -507,8 +217,17 @@ def config_with_overrides(args: argparse.Namespace, root: Path) -> dict[str, Any
         protocol["horizons"] = args.horizons
     if args.detail_ticks:
         protocol["detail_ticks"] = True
+    fact_surface = dict(config.get("fact_surface", {}))
+    if args.fact_surface:
+        fact_surface["name"] = args.fact_surface
+    if args.fact_writer_checkpoint:
+        fact_surface["checkpoint"] = args.fact_writer_checkpoint
+    if args.fact_surface_threshold is not None:
+        fact_surface["threshold"] = args.fact_surface_threshold
     config["runtime"] = runtime
     config["protocol"] = protocol
+    if fact_surface:
+        config["fact_surface"] = fact_surface
     if args.out:
         config["output"] = str(resolve_path(root, args.out))
     return config
@@ -531,6 +250,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--seeds", type=int, nargs="*")
     parser.add_argument("--horizon", dest="horizons", type=int, action="append")
     parser.add_argument("--detail-ticks", action="store_true")
+    parser.add_argument("--fact-surface", default="")
+    parser.add_argument("--fact-writer-checkpoint", default="")
+    parser.add_argument("--fact-surface-threshold", type=float, default=None)
     parser.add_argument("--out", default="")
     args = parser.parse_args(argv)
 
@@ -544,3 +266,4 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(main())
+

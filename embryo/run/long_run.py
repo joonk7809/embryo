@@ -16,7 +16,16 @@ from embryo.eval.long_run import (
     summarize_long_run_protocol,
 )
 from embryo.eval.traces import write_jsonl
-from embryo.run.long_run_arms import DEFAULT_ARMS, EpisodeState, action_is_valid, select_action_for_arm
+from embryo.models.memory_residual_policy import MemoryResidualPolicy
+from embryo.run.long_run_actors import make_long_run_actor
+from embryo.run.long_run_arms import (
+    DEFAULT_ARMS,
+    MEMORY_RESIDUAL_BIAS,
+    EpisodeState,
+    action_is_valid,
+    select_action_for_arm,
+    select_action_with_actor_sidecar,
+)
 from embryo.run.long_run_config import CRAFTER_BACKEND_DETERMINISM_PATCH, resolve_protocol_manifest
 from embryo.run.long_run_fact_surface import load_fact_surface
 from embryo.run.long_run_replay import fresh_process_deterministic_replay_summary
@@ -82,7 +91,13 @@ def collect_long_run_pass(manifest: Mapping[str, Any]) -> dict[str, Any]:
                         "fact_surface_threshold": fact_surface_cfg.get("threshold"),
                     }
                     try:
-                        episode_ticks = run_long_run_episode(actor=actor, runtime_config=runtime_cfg, fact_surface=fact_surface)
+                        episode_ticks = run_long_run_episode(
+                            actor=actor,
+                            runtime_config=runtime_cfg,
+                            protocol_config=protocol_cfg,
+                            fact_surface=fact_surface,
+                            actor_config=manifest.get("actor", {}),
+                        )
                     except Exception as exc:  # noqa: BLE001
                         if runtime_is_unavailable(exc):
                             runtime_unavailable = {"runtime": runtime_name, "reason": str(exc), "decision": NOT_EVALUABLE_RUNTIME_UNAVAILABLE}
@@ -103,7 +118,14 @@ def collect_long_run_pass(manifest: Mapping[str, Any]) -> dict[str, Any]:
     return {"episodes": episodes, "ticks": ticks, "runtime_unavailable": runtime_unavailable}
 
 
-def run_long_run_episode(*, actor: Mapping[str, Any], runtime_config: Mapping[str, Any], fact_surface: Any) -> list[dict[str, Any]]:
+def run_long_run_episode(
+    *,
+    actor: Mapping[str, Any],
+    runtime_config: Mapping[str, Any],
+    protocol_config: Mapping[str, Any] | None = None,
+    fact_surface: Any,
+    actor_config: Mapping[str, Any] | None = None,
+) -> list[dict[str, Any]]:
     horizon = int(actor["horizon"])
     runtime = make_runtime_for_horizon(
         str(runtime_config["name"]),
@@ -111,15 +133,44 @@ def run_long_run_episode(*, actor: Mapping[str, Any], runtime_config: Mapping[st
         seed=int(actor["seed"]),
         deterministic_backend_patch=runtime_config.get("deterministic_backend_patch"),
     )
+    frozen_actor = None
     try:
         current = runtime.reset(seed=int(actor["seed"]))
-        state = EpisodeState(seed=int(actor["seed"]), arm=str(actor["arm"]), horizon=horizon)
+        frozen_actor = make_long_run_actor(actor_config or {}, runtime.spec, root=Path(__file__).resolve().parents[2])
+        if frozen_actor is not None:
+            frozen_actor.reset(seed=int(actor["seed"]))
+        memory_residual_bias = max(0.0, float((actor_config or {}).get("memory_residual_bias", MEMORY_RESIDUAL_BIAS)))
+        residual_policy = MemoryResidualPolicy(strength=1.0, max_abs_bias=memory_residual_bias)
+        protocol = protocol_config if isinstance(protocol_config, Mapping) else {}
+        water_recall_config = protocol.get("water_recall", {}) if isinstance(protocol.get("water_recall", {}), Mapping) else {}
+        bench_recall_config = protocol.get("bench_recall", {}) if isinstance(protocol.get("bench_recall", {}), Mapping) else {}
+        passive_match_config = protocol.get("passive_match", {}) if isinstance(protocol.get("passive_match", {}), Mapping) else {}
+        state = EpisodeState(
+            seed=int(actor["seed"]),
+            arm=str(actor["arm"]),
+            horizon=horizon,
+            water_recall_config=water_recall_config,
+            bench_recall_config=bench_recall_config,
+            passive_match_config=passive_match_config,
+        )
         rows: list[dict[str, Any]] = []
         for tick in range(horizon):
             if current.done:
                 break
             actor_observation = fact_surface.apply(current.observation)
-            decision = select_action_for_arm(runtime.spec, actor_observation, state, str(actor["arm"]))
+            if frozen_actor is None:
+                decision = select_action_for_arm(runtime.spec, actor_observation, state, str(actor["arm"]))
+            else:
+                base_decision = frozen_actor.act(actor_observation)
+                decision = select_action_with_actor_sidecar(
+                    runtime.spec,
+                    actor_observation,
+                    state,
+                    str(actor["arm"]),
+                    base_decision,
+                    residual_policy,
+                    memory_residual_bias=memory_residual_bias,
+                )
             post_step = runtime.step(decision["action"])
             row = build_tick_row(
                 actor=actor,
@@ -137,6 +188,8 @@ def run_long_run_episode(*, actor: Mapping[str, Any], runtime_config: Mapping[st
                 break
         return rows
     finally:
+        if frozen_actor is not None:
+            frozen_actor.close()
         runtime.close()
 
 
@@ -266,4 +319,3 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(main())
-

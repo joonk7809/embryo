@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+from embryo.run.long_run_actors import actor_manifest, normalize_actor_config
 from embryo.run.long_run_arms import DEFAULT_ARMS
 from embryo.run.long_run_fact_surface import REFERENCE_RGB_SCAFFOLD
 
@@ -17,6 +18,7 @@ def resolve_protocol_manifest(config: Mapping[str, Any]) -> dict[str, Any]:
     protocol = dict(config.get("protocol", {})) if isinstance(config.get("protocol", {}), Mapping) else {}
     metrics = dict(config.get("metrics", {})) if isinstance(config.get("metrics", {}), Mapping) else {}
     fact_surface = normalize_fact_surface_config(config.get("fact_surface", {}))
+    actor = normalize_actor_config(config.get("actor", {}))
     seed_start = int(runtime.get("seed_start", 10000))
     seed_count = int(runtime.get("seed_count", 1))
     seeds = tuple(int(seed) for seed in runtime.get("seeds", range(seed_start, seed_start + seed_count)))
@@ -46,12 +48,16 @@ def resolve_protocol_manifest(config: Mapping[str, Any]) -> dict[str, Any]:
         "protocol": protocol,
         "arms": list(arms),
         "fact_surface": fact_surface,
+        "actor": actor_manifest(actor),
         "metrics": {
             "survival": bool(metrics.get("survival", True)),
             "valid_actions": bool(metrics.get("valid_actions", True)),
             "loop_rate": bool(metrics.get("loop_rate", True)),
             "event_self_trigger": bool(metrics.get("event_self_trigger", True)),
             "memory_grounded_score": bool(metrics.get("memory_grounded_score", True)),
+            "passive_match": bool(metrics.get("passive_match", False)),
+            "water_recall": bool(metrics.get("water_recall", False)),
+            "bench_recall": bool(metrics.get("bench_recall", False)),
             "contamination": bool(metrics.get("contamination", True)),
         },
     }

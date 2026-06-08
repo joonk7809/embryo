@@ -2,20 +2,24 @@
 
 ## Near Term
 
-- Collect real runtime feature rows through the runtime adapter contract.
-- Replace reference trainers with learned modules behind the same manifests.
+- Validate separate shuffled, stale, and wrong-binding controls under the
+  learned fact writer before using them for claims.
+- Keep the collapsed-control result as historical support until separated
+  controls are independently validated.
 - Keep the fixture pipeline as a release and regression check.
 
 ## Later
 
 - Add new runtime adapters without changing memory/model internals.
-- Add reinforcement-learning or world-model training only after supervised
-  runtime/module boundaries are stable.
+- Replicate a competent Crafter actor through an official or exact-baseline path
+  before making task-performance claims.
+- Add world-model or memory-policy training only after the actor and memory
+  attribution baselines are stable.
 
 ## Not Yet
 
-- No new reinforcement learning.
 - No broad task-performance claims.
+- No memory-benefit claim from the experimental survival training lane.
 - No migration to larger runtimes until the package is usable.
 - No dataset, checkpoint, or experiment-artifact release until the artifact
   policy is explicit.

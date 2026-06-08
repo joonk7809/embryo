@@ -1,0 +1,39 @@
+runtime:
+  name: crafter_memory
+  split: dev
+  seed_start: 10000
+  seed_count: 1
+
+actor:
+  name: delta_iris
+  repo_path: runs/external/delta-iris
+  checkpoint: runs/external/delta-iris/checkpoints/last.pt
+  policy_mode: argmax
+  device: cpu
+  memory_residual_bias: 2.0
+
+protocol:
+  horizons: [256]
+  max_episodes_per_seed: 1
+  detail_ticks: true
+  min_evaluable_seed_rate: 0.5
+
+fact_surface:
+  name: learned_fact_writer_v0
+  checkpoint: runs/fact_writer_sanity/checkpoint/fact_writer.json
+  threshold: 0.5
+
+arms:
+  - no_memory
+  - query_memory_clean
+  - query_memory_shuffled
+  - query_memory_stale
+  - query_memory_wrong_binding
+
+metrics:
+  survival: true
+  valid_actions: true
+  loop_rate: true
+  event_self_trigger: true
+  memory_grounded_score: true
+  contamination: true

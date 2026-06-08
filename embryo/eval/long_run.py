@@ -24,16 +24,41 @@ NOT_EVALUABLE_NO_MEMORY_ANCHORS = "NOT_EVALUABLE_no_memory_anchors"
 NOT_EVALUABLE_RUNTIME_UNAVAILABLE = "NOT_EVALUABLE_runtime_unavailable"
 GO_MEMORY_EVALUABLE_SEED_BLOCK = "GO_memory_evaluable_seed_block"
 NOT_EVALUABLE_INSUFFICIENT_ANCHOR_COVERAGE = "NOT_EVALUABLE_insufficient_anchor_coverage"
+GO_WATER_RECALL_EVALUABLE = "GO_water_recall_evaluable"
+GO_BENCH_RECALL_EVALUABLE = "GO_bench_recall_evaluable"
+GO_PASSIVE_MATCH_EVALUABLE = "GO_passive_match_evaluable"
+INCONCLUSIVE_LOW_ERE = "INCONCLUSIVE_LOW_ERE"
 
 FORWARD_CLEAN_ARM = "query_memory_clean"
 FORWARD_CORRUPTED_CONTROL_ARMS = (
-    "query_memory_wrong_binding",
     "query_memory_shuffled",
     "query_memory_stale",
+    "query_memory_wrong_binding",
 )
 FORWARD_CONTROL_ARMS = (
     *FORWARD_CORRUPTED_CONTROL_ARMS,
     "no_memory",
+)
+WATER_RECALL_CLEAN_ARM = "water_recall_clean"
+WATER_RECALL_CONTROL_ARMS = (
+    "water_recall_off",
+    "water_recall_shuffled",
+    "water_recall_stale",
+    "water_recall_wrong_binding",
+)
+BENCH_RECALL_CLEAN_ARM = "bench_recall_clean"
+BENCH_RECALL_CONTROL_ARMS = (
+    "bench_recall_off",
+    "bench_recall_shuffled",
+    "bench_recall_stale",
+    "bench_recall_wrong_binding",
+)
+PASSIVE_MATCH_CLEAN_ARM = "passive_match_clean"
+PASSIVE_MATCH_CONTROL_ARMS = (
+    "passive_match_off",
+    "passive_match_shuffled",
+    "passive_match_stale",
+    "passive_match_wrong_binding",
 )
 
 
@@ -154,6 +179,9 @@ def summarize_long_run_protocol(
         "summary_by_horizon": summarize_by_key(episodes, "horizon"),
         "memory_grounded_score": memory,
         "anchor_coverage": coverage,
+        "passive_match": passive_match_protocol_summary(ticks, protocol_manifest=protocol_manifest),
+        "water_recall": water_recall_protocol_summary(ticks, protocol_manifest=protocol_manifest),
+        "bench_recall": bench_recall_protocol_summary(ticks, protocol_manifest=protocol_manifest),
         "deterministic_replay": determinism,
         "contamination": dict(contamination),
         "runtime_unavailable": runtime_unavailable,
@@ -227,6 +255,457 @@ def memory_score_rows(ticks: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]
             }
         )
     return rows
+
+
+def passive_match_protocol_summary(
+    ticks: Sequence[Mapping[str, Any]],
+    *,
+    protocol_manifest: Mapping[str, Any],
+) -> dict[str, Any]:
+    if not passive_match_present(protocol_manifest, ticks):
+        return {"enabled": False, "status": "disabled"}
+    rows = [
+        row
+        for row in ticks
+        if isinstance(row.get("actor", {}), Mapping)
+        and isinstance(row.get("metrics", {}), Mapping)
+        and str(row["actor"].get("arm", "")) in {PASSIVE_MATCH_CLEAN_ARM, *PASSIVE_MATCH_CONTROL_ARMS}
+    ]
+    by_key = {
+        (
+            str(row["actor"].get("arm", "")),
+            int(row["actor"].get("seed", 0)),
+            str(row["actor"].get("episode_id", row["actor"].get("episode_index", "0"))),
+            int(row["actor"].get("tick", 0)),
+        ): row
+        for row in rows
+    }
+    clean_ere_rows = [row for row in rows if str(row["actor"].get("arm", "")) == PASSIVE_MATCH_CLEAN_ARM and bool(row["metrics"].get("passive_match_ere", False))]
+    episode_keys = {
+        (
+            int(row["actor"].get("seed", 0)),
+            str(row["actor"].get("episode_id", row["actor"].get("episode_index", "0"))),
+        )
+        for row in rows
+        if str(row["actor"].get("arm", "")) == PASSIVE_MATCH_CLEAN_ARM
+    }
+    ere_episode_keys = {
+        (
+            int(row["actor"].get("seed", 0)),
+            str(row["actor"].get("episode_id", row["actor"].get("episode_index", "0"))),
+        )
+        for row in clean_ere_rows
+    }
+    requirements = passive_match_requirements(protocol_manifest)
+    ere_episode_rate = round(len(ere_episode_keys) / len(episode_keys), 4) if episode_keys else 0.0
+    status = GO_PASSIVE_MATCH_EVALUABLE
+    if len(clean_ere_rows) < int(requirements["min_ere_count"]) or ere_episode_rate < float(requirements["min_ere_episode_rate"]):
+        status = INCONCLUSIVE_LOW_ERE
+    return {
+        "enabled": True,
+        "status": status,
+        "requirements": requirements,
+        "clean_ere_count": len(clean_ere_rows),
+        "clean_ere_episode_count": len(ere_episode_keys),
+        "clean_episode_count": len(episode_keys),
+        "clean_ere_episode_rate": ere_episode_rate,
+        "summary_by_arm": passive_match_summary_by_arm(rows),
+        "contrasts": passive_match_contrasts(clean_ere_rows, by_key),
+        "per_seed": passive_match_per_seed(rows),
+    }
+
+
+def passive_match_present(protocol_manifest: Mapping[str, Any], ticks: Sequence[Mapping[str, Any]]) -> bool:
+    arms = set(str(arm) for arm in protocol_manifest.get("arms", ()))
+    if PASSIVE_MATCH_CLEAN_ARM in arms or any(arm in arms for arm in PASSIVE_MATCH_CONTROL_ARMS):
+        return True
+    return any(bool(nested(row, "metrics", "passive_match_ere", False)) for row in ticks)
+
+
+def passive_match_requirements(protocol_manifest: Mapping[str, Any]) -> dict[str, Any]:
+    protocol = protocol_manifest.get("protocol", {})
+    passive = protocol.get("passive_match", {}) if isinstance(protocol, Mapping) else {}
+    passive = passive if isinstance(passive, Mapping) else {}
+    return {
+        "min_ere_count": int(passive.get("min_ere_count", 30)),
+        "min_ere_episode_rate": float(passive.get("min_ere_episode_rate", 0.5)),
+        "recall_window": int(passive.get("recall_window", 1)),
+    }
+
+
+def passive_match_summary_by_arm(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    grouped: dict[str, list[Mapping[str, Any]]] = defaultdict(list)
+    for row in rows:
+        grouped[str(row["actor"].get("arm", "unknown"))].append(row)
+    return {arm: passive_match_arm_summary(items) for arm, items in sorted(grouped.items())}
+
+
+def passive_match_arm_summary(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    ere_rows = [row for row in rows if bool(row["metrics"].get("passive_match_ere", False))]
+    final_rows = [row for row in rows if row.get("eval_only", {}).get("passive_match_success_eval_only") is not None]
+    actions = [str(row["actor"].get("action", "")) for row in ere_rows]
+    return {
+        "tick_count": len(rows),
+        "ere_count": len(ere_rows),
+        "cue_visible_count": sum(int(bool(row["metrics"].get("passive_match_cue_visible", False))) for row in rows),
+        "choice_visible_count": sum(int(bool(row["metrics"].get("passive_match_choice_visible", False))) for row in rows),
+        "recall_active_rate": round(bool_rate(row["metrics"].get("passive_match_recall_active", False) for row in ere_rows), 4),
+        "recall_consistent_action_rate": round(
+            bool_rate(row["metrics"].get("passive_match_recall_consistent_action", False) for row in ere_rows),
+            4,
+        ),
+        "success_rate_eval_only": round(bool_rate(row["eval_only"].get("passive_match_success_eval_only", False) for row in final_rows), 4),
+        "mean_reward_on_final_eval_only": round(mean(row["eval_only"].get("reward_delta_eval_only", 0.0) for row in final_rows), 4),
+        "mean_fact_age_on_ere": round(mean(row["metrics"].get("passive_match_fact_age") for row in ere_rows), 4),
+        "action_distribution_on_ere": dict(sorted(Counter(actions).items())),
+    }
+
+
+def passive_match_contrasts(
+    clean_ere_rows: Sequence[Mapping[str, Any]],
+    by_key: Mapping[tuple[str, int, str, int], Mapping[str, Any]],
+) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    clean_consistency = bool_rate(nested(row, "metrics", "passive_match_recall_consistent_action", False) for row in clean_ere_rows)
+    clean_success = bool_rate(nested(row, "eval_only", "passive_match_success_eval_only", False) for row in clean_ere_rows)
+    for arm in PASSIVE_MATCH_CONTROL_ARMS:
+        comparable: list[Mapping[str, Any]] = []
+        for row in clean_ere_rows:
+            actor = row["actor"]
+            key = (
+                arm,
+                int(actor.get("seed", 0)),
+                str(actor.get("episode_id", actor.get("episode_index", "0"))),
+                int(actor.get("tick", 0)),
+            )
+            if key in by_key:
+                comparable.append(by_key[key])
+        control_consistency = bool_rate(nested(row, "metrics", "passive_match_recall_consistent_action", False) for row in comparable)
+        control_success = bool_rate(nested(row, "eval_only", "passive_match_success_eval_only", False) for row in comparable)
+        result[arm] = {
+            "comparable_ere_count": len(comparable),
+            "clean_recall_consistent_action_rate": round(clean_consistency, 4),
+            "control_recall_consistent_action_rate": round(control_consistency, 4),
+            "clean_minus_control_recall_consistent_action_rate": round(clean_consistency - control_consistency, 4),
+            "clean_success_rate_eval_only": round(clean_success, 4),
+            "control_success_rate_eval_only": round(control_success, 4),
+            "clean_minus_control_success_rate_eval_only": round(clean_success - control_success, 4),
+        }
+    return result
+
+
+def passive_match_per_seed(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    grouped: dict[int, list[Mapping[str, Any]]] = defaultdict(list)
+    for row in rows:
+        grouped[int(row["actor"].get("seed", 0))].append(row)
+    return {
+        str(seed): {
+            "clean_ere_count": sum(
+                int(str(row["actor"].get("arm", "")) == PASSIVE_MATCH_CLEAN_ARM and bool(row["metrics"].get("passive_match_ere", False)))
+                for row in items
+            ),
+            "cue_visible_count": sum(int(bool(row["metrics"].get("passive_match_cue_visible", False))) for row in items),
+            "choice_visible_count": sum(int(bool(row["metrics"].get("passive_match_choice_visible", False))) for row in items),
+        }
+        for seed, items in sorted(grouped.items())
+    }
+
+
+def water_recall_protocol_summary(
+    ticks: Sequence[Mapping[str, Any]],
+    *,
+    protocol_manifest: Mapping[str, Any],
+) -> dict[str, Any]:
+    if not water_recall_present(protocol_manifest, ticks):
+        return {"enabled": False, "status": "disabled"}
+    rows = [
+        row
+        for row in ticks
+        if isinstance(row.get("actor", {}), Mapping)
+        and isinstance(row.get("metrics", {}), Mapping)
+        and str(row["actor"].get("arm", "")) in {WATER_RECALL_CLEAN_ARM, *WATER_RECALL_CONTROL_ARMS}
+    ]
+    by_key = {
+        (
+            str(row["actor"].get("arm", "")),
+            int(row["actor"].get("seed", 0)),
+            str(row["actor"].get("episode_id", row["actor"].get("episode_index", "0"))),
+            int(row["actor"].get("tick", 0)),
+        ): row
+        for row in rows
+    }
+    clean_ere_rows = [row for row in rows if str(row["actor"].get("arm", "")) == WATER_RECALL_CLEAN_ARM and bool(row["metrics"].get("water_recall_ere", False))]
+    episode_keys = {
+        (
+            int(row["actor"].get("seed", 0)),
+            str(row["actor"].get("episode_id", row["actor"].get("episode_index", "0"))),
+        )
+        for row in rows
+        if str(row["actor"].get("arm", "")) == WATER_RECALL_CLEAN_ARM
+    }
+    ere_episode_keys = {
+        (
+            int(row["actor"].get("seed", 0)),
+            str(row["actor"].get("episode_id", row["actor"].get("episode_index", "0"))),
+        )
+        for row in clean_ere_rows
+    }
+    requirements = water_recall_requirements(protocol_manifest)
+    ere_episode_rate = round(len(ere_episode_keys) / len(episode_keys), 4) if episode_keys else 0.0
+    status = GO_WATER_RECALL_EVALUABLE
+    if len(clean_ere_rows) < int(requirements["min_ere_count"]) or ere_episode_rate < float(requirements["min_ere_episode_rate"]):
+        status = INCONCLUSIVE_LOW_ERE
+    return {
+        "enabled": True,
+        "status": status,
+        "requirements": requirements,
+        "clean_ere_count": len(clean_ere_rows),
+        "clean_ere_episode_count": len(ere_episode_keys),
+        "clean_episode_count": len(episode_keys),
+        "clean_ere_episode_rate": ere_episode_rate,
+        "summary_by_arm": water_recall_summary_by_arm(rows),
+        "contrasts": water_recall_contrasts(clean_ere_rows, by_key),
+        "per_seed": water_recall_per_seed(rows),
+    }
+
+
+def water_recall_present(protocol_manifest: Mapping[str, Any], ticks: Sequence[Mapping[str, Any]]) -> bool:
+    arms = set(str(arm) for arm in protocol_manifest.get("arms", ()))
+    if WATER_RECALL_CLEAN_ARM in arms or any(arm in arms for arm in WATER_RECALL_CONTROL_ARMS):
+        return True
+    return any(bool(nested(row, "metrics", "water_recall_ere", False)) for row in ticks)
+
+
+def water_recall_requirements(protocol_manifest: Mapping[str, Any]) -> dict[str, Any]:
+    protocol = protocol_manifest.get("protocol", {})
+    water = protocol.get("water_recall", {}) if isinstance(protocol, Mapping) else {}
+    water = water if isinstance(water, Mapping) else {}
+    return {
+        "min_ere_count": int(water.get("min_ere_count", 30)),
+        "min_ere_episode_rate": float(water.get("min_ere_episode_rate", 0.5)),
+        "recall_window": int(water.get("recall_window", 4)),
+    }
+
+
+def water_recall_summary_by_arm(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    grouped: dict[str, list[Mapping[str, Any]]] = defaultdict(list)
+    for row in rows:
+        grouped[str(row["actor"].get("arm", "unknown"))].append(row)
+    return {arm: water_recall_arm_summary(items) for arm, items in sorted(grouped.items())}
+
+
+def water_recall_arm_summary(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    ere_rows = [row for row in rows if bool(row["metrics"].get("water_recall_ere", False))]
+    visible_rows = [row for row in rows if bool(row["metrics"].get("water_visible", False))]
+    action_values = [str(row["actor"].get("action", "")) for row in ere_rows]
+    return {
+        "tick_count": len(rows),
+        "ere_count": len(ere_rows),
+        "water_visible_count": len(visible_rows),
+        "water_visible_rate": round(len(visible_rows) / len(rows), 4) if rows else 0.0,
+        "recall_active_rate": round(bool_rate(row["metrics"].get("water_recall_active", False) for row in ere_rows), 4),
+        "recall_consistent_action_rate": round(
+            bool_rate(row["metrics"].get("water_recall_consistent_action", False) for row in ere_rows),
+            4,
+        ),
+        "mean_fact_age_on_ere": round(mean(row["metrics"].get("water_fact_age") for row in ere_rows), 4),
+        "action_distribution_on_ere": dict(sorted(Counter(action_values).items())),
+    }
+
+
+def water_recall_contrasts(
+    clean_ere_rows: Sequence[Mapping[str, Any]],
+    by_key: Mapping[tuple[str, int, str, int], Mapping[str, Any]],
+) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    clean_rate = bool_rate(nested(row, "metrics", "water_recall_consistent_action", False) for row in clean_ere_rows)
+    for arm in WATER_RECALL_CONTROL_ARMS:
+        comparable: list[Mapping[str, Any]] = []
+        for row in clean_ere_rows:
+            actor = row["actor"]
+            key = (
+                arm,
+                int(actor.get("seed", 0)),
+                str(actor.get("episode_id", actor.get("episode_index", "0"))),
+                int(actor.get("tick", 0)),
+            )
+            if key in by_key:
+                comparable.append(by_key[key])
+        control_rate = bool_rate(nested(row, "metrics", "water_recall_consistent_action", False) for row in comparable)
+        result[arm] = {
+            "comparable_ere_count": len(comparable),
+            "clean_recall_consistent_action_rate": round(clean_rate, 4),
+            "control_recall_consistent_action_rate": round(control_rate, 4),
+            "clean_minus_control_recall_consistent_action_rate": round(clean_rate - control_rate, 4),
+        }
+    return result
+
+
+def water_recall_per_seed(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    grouped: dict[int, list[Mapping[str, Any]]] = defaultdict(list)
+    for row in rows:
+        grouped[int(row["actor"].get("seed", 0))].append(row)
+    return {
+        str(seed): {
+            "clean_ere_count": sum(
+                int(str(row["actor"].get("arm", "")) == WATER_RECALL_CLEAN_ARM and bool(row["metrics"].get("water_recall_ere", False)))
+                for row in items
+            ),
+            "water_visible_count": sum(int(bool(row["metrics"].get("water_visible", False))) for row in items),
+            "water_need_active_count": sum(int(bool(row["metrics"].get("water_need_active", False))) for row in items),
+        }
+        for seed, items in sorted(grouped.items())
+    }
+
+
+def bench_recall_protocol_summary(
+    ticks: Sequence[Mapping[str, Any]],
+    *,
+    protocol_manifest: Mapping[str, Any],
+) -> dict[str, Any]:
+    if not bench_recall_present(protocol_manifest, ticks):
+        return {"enabled": False, "status": "disabled"}
+    rows = [
+        row
+        for row in ticks
+        if isinstance(row.get("actor", {}), Mapping)
+        and isinstance(row.get("metrics", {}), Mapping)
+        and str(row["actor"].get("arm", "")) in {BENCH_RECALL_CLEAN_ARM, *BENCH_RECALL_CONTROL_ARMS}
+    ]
+    by_key = {
+        (
+            str(row["actor"].get("arm", "")),
+            int(row["actor"].get("seed", 0)),
+            str(row["actor"].get("episode_id", row["actor"].get("episode_index", "0"))),
+            int(row["actor"].get("tick", 0)),
+        ): row
+        for row in rows
+    }
+    clean_ere_rows = [row for row in rows if str(row["actor"].get("arm", "")) == BENCH_RECALL_CLEAN_ARM and bool(row["metrics"].get("bench_recall_ere", False))]
+    episode_keys = {
+        (
+            int(row["actor"].get("seed", 0)),
+            str(row["actor"].get("episode_id", row["actor"].get("episode_index", "0"))),
+        )
+        for row in rows
+        if str(row["actor"].get("arm", "")) == BENCH_RECALL_CLEAN_ARM
+    }
+    ere_episode_keys = {
+        (
+            int(row["actor"].get("seed", 0)),
+            str(row["actor"].get("episode_id", row["actor"].get("episode_index", "0"))),
+        )
+        for row in clean_ere_rows
+    }
+    requirements = bench_recall_requirements(protocol_manifest)
+    ere_episode_rate = round(len(ere_episode_keys) / len(episode_keys), 4) if episode_keys else 0.0
+    status = GO_BENCH_RECALL_EVALUABLE
+    if len(clean_ere_rows) < int(requirements["min_ere_count"]) or ere_episode_rate < float(requirements["min_ere_episode_rate"]):
+        status = INCONCLUSIVE_LOW_ERE
+    return {
+        "enabled": True,
+        "status": status,
+        "requirements": requirements,
+        "clean_ere_count": len(clean_ere_rows),
+        "clean_ere_episode_count": len(ere_episode_keys),
+        "clean_episode_count": len(episode_keys),
+        "clean_ere_episode_rate": ere_episode_rate,
+        "summary_by_arm": bench_recall_summary_by_arm(rows),
+        "contrasts": bench_recall_contrasts(clean_ere_rows, by_key),
+        "per_seed": bench_recall_per_seed(rows),
+    }
+
+
+def bench_recall_present(protocol_manifest: Mapping[str, Any], ticks: Sequence[Mapping[str, Any]]) -> bool:
+    arms = set(str(arm) for arm in protocol_manifest.get("arms", ()))
+    if BENCH_RECALL_CLEAN_ARM in arms or any(arm in arms for arm in BENCH_RECALL_CONTROL_ARMS):
+        return True
+    return any(bool(nested(row, "metrics", "bench_recall_ere", False)) for row in ticks)
+
+
+def bench_recall_requirements(protocol_manifest: Mapping[str, Any]) -> dict[str, Any]:
+    protocol = protocol_manifest.get("protocol", {})
+    bench = protocol.get("bench_recall", {}) if isinstance(protocol, Mapping) else {}
+    bench = bench if isinstance(bench, Mapping) else {}
+    return {
+        "min_ere_count": int(bench.get("min_ere_count", 30)),
+        "min_ere_episode_rate": float(bench.get("min_ere_episode_rate", 0.5)),
+        "recall_window": int(bench.get("recall_window", 4)),
+    }
+
+
+def bench_recall_summary_by_arm(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    grouped: dict[str, list[Mapping[str, Any]]] = defaultdict(list)
+    for row in rows:
+        grouped[str(row["actor"].get("arm", "unknown"))].append(row)
+    return {arm: bench_recall_arm_summary(items) for arm, items in sorted(grouped.items())}
+
+
+def bench_recall_arm_summary(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    ere_rows = [row for row in rows if bool(row["metrics"].get("bench_recall_ere", False))]
+    action_values = [str(row["actor"].get("action", "")) for row in ere_rows]
+    base_actions = [str(row["metrics"].get("bench_base_crafting_action", "")) for row in ere_rows if row["metrics"].get("bench_base_crafting_action")]
+    return {
+        "tick_count": len(rows),
+        "ere_count": len(ere_rows),
+        "bench_fact_present_count": sum(int(bool(row["metrics"].get("bench_fact_present", False))) for row in rows),
+        "bench_need_active_count": sum(int(bool(row["metrics"].get("bench_need_active", False))) for row in rows),
+        "repeat_place_suppressed_count": sum(int(bool(row["metrics"].get("bench_repeat_place_suppressed", False))) for row in rows),
+        "recall_active_rate": round(bool_rate(row["metrics"].get("bench_recall_active", False) for row in ere_rows), 4),
+        "recall_consistent_action_rate": round(
+            bool_rate(row["metrics"].get("bench_recall_consistent_action", False) for row in ere_rows),
+            4,
+        ),
+        "mean_fact_age_on_ere": round(mean(row["metrics"].get("bench_fact_age") for row in ere_rows), 4),
+        "action_distribution_on_ere": dict(sorted(Counter(action_values).items())),
+        "base_crafting_action_distribution_on_ere": dict(sorted(Counter(base_actions).items())),
+    }
+
+
+def bench_recall_contrasts(
+    clean_ere_rows: Sequence[Mapping[str, Any]],
+    by_key: Mapping[tuple[str, int, str, int], Mapping[str, Any]],
+) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    clean_rate = bool_rate(nested(row, "metrics", "bench_recall_consistent_action", False) for row in clean_ere_rows)
+    for arm in BENCH_RECALL_CONTROL_ARMS:
+        comparable: list[Mapping[str, Any]] = []
+        for row in clean_ere_rows:
+            actor = row["actor"]
+            key = (
+                arm,
+                int(actor.get("seed", 0)),
+                str(actor.get("episode_id", actor.get("episode_index", "0"))),
+                int(actor.get("tick", 0)),
+            )
+            if key in by_key:
+                comparable.append(by_key[key])
+        control_rate = bool_rate(nested(row, "metrics", "bench_recall_consistent_action", False) for row in comparable)
+        result[arm] = {
+            "comparable_ere_count": len(comparable),
+            "clean_recall_consistent_action_rate": round(clean_rate, 4),
+            "control_recall_consistent_action_rate": round(control_rate, 4),
+            "clean_minus_control_recall_consistent_action_rate": round(clean_rate - control_rate, 4),
+        }
+    return result
+
+
+def bench_recall_per_seed(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    grouped: dict[int, list[Mapping[str, Any]]] = defaultdict(list)
+    for row in rows:
+        grouped[int(row["actor"].get("seed", 0))].append(row)
+    return {
+        str(seed): {
+            "clean_ere_count": sum(
+                int(str(row["actor"].get("arm", "")) == BENCH_RECALL_CLEAN_ARM and bool(row["metrics"].get("bench_recall_ere", False)))
+                for row in items
+            ),
+            "bench_fact_present_count": sum(int(bool(row["metrics"].get("bench_fact_present", False))) for row in items),
+            "bench_need_active_count": sum(int(bool(row["metrics"].get("bench_need_active", False))) for row in items),
+            "repeat_place_suppressed_count": sum(int(bool(row["metrics"].get("bench_repeat_place_suppressed", False))) for row in items),
+        }
+        for seed, items in sorted(grouped.items())
+    }
 
 
 def contamination_summary(ticks: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
@@ -463,6 +942,9 @@ def format_long_run_summary_markdown(summary: Mapping[str, Any]) -> str:
         f"- Decision: `{summary.get('decision')}`",
         f"- Memory evaluability: `{summary.get('memory_evaluability_decision')}`",
         f"- Runtime: `{protocol.get('runtime')}`",
+        f"- Actor: `{protocol.get('actor')}`",
+        f"- Actor policy mode: `{protocol.get('actor_policy_mode')}`",
+        f"- Memory residual bias: `{protocol.get('actor_memory_residual_bias')}`",
         f"- Split: `{protocol.get('split')}`",
         f"- Fact surface: `{protocol.get('fact_surface')}`",
         f"- Horizons: `{protocol.get('horizons')}`",
@@ -525,6 +1007,123 @@ def format_long_run_summary_markdown(summary: Mapping[str, Any]) -> str:
             "",
         ]
     )
+    water = summary.get("water_recall", {})
+    water = water if isinstance(water, Mapping) else {}
+    if bool(water.get("enabled", False)):
+        lines.extend(
+            [
+                "## Water Recall",
+                "",
+                f"- Status: `{water.get('status')}`",
+                f"- Clean ERE count: `{water.get('clean_ere_count')}`",
+                f"- Clean ERE episode rate: `{water.get('clean_ere_episode_rate')}`",
+                f"- Requirements: `{water.get('requirements')}`",
+                "",
+            ]
+        )
+        contrasts = water.get("contrasts", {})
+        if isinstance(contrasts, Mapping):
+            lines.extend(
+                [
+                    "| Control | Comparable EREs | Clean rate | Control rate | Delta |",
+                    "| --- | ---: | ---: | ---: | ---: |",
+                ]
+            )
+            for arm, row in contrasts.items():
+                if not isinstance(row, Mapping):
+                    continue
+                lines.append(
+                    "| "
+                    + " | ".join(
+                        [
+                            str(arm),
+                            str(row.get("comparable_ere_count")),
+                            str(row.get("clean_recall_consistent_action_rate")),
+                            str(row.get("control_recall_consistent_action_rate")),
+                            str(row.get("clean_minus_control_recall_consistent_action_rate")),
+                        ]
+                    )
+                    + " |"
+                )
+            lines.append("")
+    passive = summary.get("passive_match", {})
+    passive = passive if isinstance(passive, Mapping) else {}
+    if bool(passive.get("enabled", False)):
+        lines.extend(
+            [
+                "## Passive Match",
+                "",
+                f"- Status: `{passive.get('status')}`",
+                f"- Clean ERE count: `{passive.get('clean_ere_count')}`",
+                f"- Clean ERE episode rate: `{passive.get('clean_ere_episode_rate')}`",
+                f"- Requirements: `{passive.get('requirements')}`",
+                "",
+            ]
+        )
+        contrasts = passive.get("contrasts", {})
+        if isinstance(contrasts, Mapping):
+            lines.extend(
+                [
+                    "| Control | Comparable EREs | Clean success | Control success | Delta |",
+                    "| --- | ---: | ---: | ---: | ---: |",
+                ]
+            )
+            for arm, row in contrasts.items():
+                if not isinstance(row, Mapping):
+                    continue
+                lines.append(
+                    "| "
+                    + " | ".join(
+                        [
+                            str(arm),
+                            str(row.get("comparable_ere_count")),
+                            str(row.get("clean_success_rate_eval_only")),
+                            str(row.get("control_success_rate_eval_only")),
+                            str(row.get("clean_minus_control_success_rate_eval_only")),
+                        ]
+                    )
+                    + " |"
+                )
+            lines.append("")
+    bench = summary.get("bench_recall", {})
+    bench = bench if isinstance(bench, Mapping) else {}
+    if bool(bench.get("enabled", False)):
+        lines.extend(
+            [
+                "## Bench Recall",
+                "",
+                f"- Status: `{bench.get('status')}`",
+                f"- Clean ERE count: `{bench.get('clean_ere_count')}`",
+                f"- Clean ERE episode rate: `{bench.get('clean_ere_episode_rate')}`",
+                f"- Requirements: `{bench.get('requirements')}`",
+                "",
+            ]
+        )
+        contrasts = bench.get("contrasts", {})
+        if isinstance(contrasts, Mapping):
+            lines.extend(
+                [
+                    "| Control | Comparable EREs | Clean rate | Control rate | Delta |",
+                    "| --- | ---: | ---: | ---: | ---: |",
+                ]
+            )
+            for arm, row in contrasts.items():
+                if not isinstance(row, Mapping):
+                    continue
+                lines.append(
+                    "| "
+                    + " | ".join(
+                        [
+                            str(arm),
+                            str(row.get("comparable_ere_count")),
+                            str(row.get("clean_recall_consistent_action_rate")),
+                            str(row.get("control_recall_consistent_action_rate")),
+                            str(row.get("clean_minus_control_recall_consistent_action_rate")),
+                        ]
+                    )
+                    + " |"
+                )
+            lines.append("")
     return "\n".join(lines) + "\n"
 
 
@@ -532,11 +1131,18 @@ def public_protocol_summary(protocol_manifest: Mapping[str, Any]) -> dict[str, A
     runtime = protocol_manifest.get("runtime", {})
     protocol = protocol_manifest.get("protocol", {})
     fact_surface = protocol_manifest.get("fact_surface", {})
+    actor = protocol_manifest.get("actor", {})
     runtime = runtime if isinstance(runtime, Mapping) else {}
     protocol = protocol if isinstance(protocol, Mapping) else {}
     fact_surface = fact_surface if isinstance(fact_surface, Mapping) else {}
+    actor = actor if isinstance(actor, Mapping) else {}
     return {
         "runtime": runtime.get("name"),
+        "actor": actor.get("name"),
+        "actor_checkpoint": actor.get("checkpoint"),
+        "actor_repo_path": actor.get("repo_path"),
+        "actor_policy_mode": actor.get("policy_mode"),
+        "actor_memory_residual_bias": actor.get("memory_residual_bias"),
         "split": runtime.get("split"),
         "seed_start": runtime.get("seed_start"),
         "seed_count": runtime.get("seed_count"),
@@ -546,6 +1152,9 @@ def public_protocol_summary(protocol_manifest: Mapping[str, Any]) -> dict[str, A
         "determinism_check": protocol.get("determinism_check"),
         "min_evaluable_anchor_count": protocol.get("min_evaluable_anchor_count"),
         "min_evaluable_seed_rate": protocol.get("min_evaluable_seed_rate"),
+        "water_recall": protocol.get("water_recall"),
+        "bench_recall": protocol.get("bench_recall"),
+        "passive_match": protocol.get("passive_match"),
         "deterministic_backend_patch": runtime.get("deterministic_backend_patch"),
         "backend_determinism_patch": runtime.get("backend_determinism_patch"),
         "fact_surface": fact_surface.get("name"),

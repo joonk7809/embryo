@@ -2,36 +2,26 @@
 
 **One-line:** Experiment testing whether learned perception-memory-action stacks can produce *causally verifiable* memory use in visual embodied environments, using only deployable observations and no privileged state.
 
-## Core Result
+## Current Diagnostic Result
 
-In closed-loop Crafter diagnostic replay, the learned stack preserved memory-grounded separation from corrupted and absent-memory controls.
+In fixed-seed Crafter long-run replay, `learned_fact_writer_v0` makes the
+dev16/h512 seed block memory-evaluable where the reference RGB scaffold does
+not.
 
-The stack includes:
+Current strongest supported statement:
 
-- RGB-derived visual fact writer
-- query/freshness router
-- behavior-cloned policy
-- memory-grounded scorer
+```text
+learned_fact_writer_v0 improves Crafter memory-evaluability and produces a
+large diagnostic clean-vs-control score under the prior collapsed-control
+long-run protocol.
+```
 
-**Key Metrics:**
+This is a protocol/mechanism result. It is not a Crafter competence result and
+not final causal proof under separate shuffled, stale, and wrong-binding control
+families.
 
-| Control | Grounded Gap | Resource Divergence |
-| --- | ---: | ---: |
-| No memory | 18.75 | n/a |
-| Shuffled query | 19.01 | 0.856 |
-| Stale memory | 19.10 | 0.997 |
-| Wrong binding | 18.71 | 0.932 |
-
-Additional checks:
-
-- Route preservation = 1.00
-- Event self-trigger = 0.00
-- Invalid action rate = 0.00
-- Contamination failures = 0
-
-This provides evidence that structured queryable memory with freshness controls can causally influence behavior beyond immediate observations.
-
-**Explicitly not claimed:** Crafter task performance, RL success, online fine-tuning, or generalization.
+**Explicitly not claimed:** Crafter task performance, memory-driven benchmark
+improvement, RL success, online fine-tuning, or generalization.
 
 ## Experimental Approach
 
@@ -58,7 +48,10 @@ We enforce hard boundaries:
 Deployable inventory belief inferred from observations or agent-owned events is
 a future memory surface, not a privileged actor input.
 
-Validated against no-memory, shuffled, stale, and wrong-binding controls.
+The forward long-run protocol tests clean memory against no-memory plus
+separate shuffled, stale, and wrong-binding corrupt-memory controls. The
+existing strongest supported result still comes from the collapsed-control path;
+the separated controls need fresh validation before supporting a stronger claim.
 
 ## Architecture
 
@@ -68,14 +61,15 @@ Runtime trace
   -> Visual fact writer (learned)
   -> Sparse facts
   -> Queryable memory
-  -> Freshness-aware router (learned)
-  -> Behavior-cloned policy
+  -> Freshness-aware router / reference action policy
   -> Closed-loop replay + memory-grounded scoring
 ```
 
 ## Limitations
 
-- Behavior-cloned policy only; no online RL or fine-tuning yet.
+- The current memory result does not rely on PPO/RL.
+- A separate experimental Crafter survival actor training lane exists, but it
+  does not currently support a memory, competence, or benchmark claim.
 - Diagnostic Crafter replay, not task-solving performance.
 - Small models, single environment.
 - No transfer demonstrated to Craftax, Minecraft, or robotics.
@@ -130,9 +124,10 @@ python scripts/check_release.py
 
 ## Next Steps
 
-- Reproduce the full diagnostic result in the clean package with real Crafter training runs.
-- Add inference optimizations to fact writing and routing.
-- Expand runtime support.
+- Align and validate corrupt-control families under the learned fact writer.
+- Replicate a competent Crafter actor through an official or exact-baseline
+  path before making task-performance claims.
+- Keep survival training results separate from memory-mechanism claims.
 
 ## License
 

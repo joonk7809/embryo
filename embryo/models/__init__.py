@@ -1,5 +1,6 @@
 """Learned module interfaces."""
 
+from embryo.models.actors import ActorDecision, FrozenActor, action_from_logits, decision_action_is_valid
 from embryo.models.bc_policy import BCPolicy, RouteBCPolicy
 from embryo.models.checkpoints import (
     CheckpointManifest,
@@ -18,6 +19,7 @@ from embryo.models.fact_writer import (
     save_fact_writer_checkpoint,
     train_learned_fact_writer_v0,
 )
+from embryo.models.memory_residual_policy import MemoryResidualDecision, MemoryResidualInput, MemoryResidualPolicy
 from embryo.models.router import RouterModel, RouterOutput, RuleRouterModel
 from embryo.models.stack import (
     StackManifest,
@@ -29,10 +31,15 @@ from embryo.models.stack import (
 )
 
 __all__ = [
+    "ActorDecision",
     "BCPolicy",
     "CheckpointManifest",
     "FactWriterOutput",
+    "FrozenActor",
     "LearnedFactWriterV0",
+    "MemoryResidualDecision",
+    "MemoryResidualInput",
+    "MemoryResidualPolicy",
     "RouteBCPolicy",
     "RouterModel",
     "RouterOutput",
@@ -40,9 +47,11 @@ __all__ = [
     "StackManifest",
     "ThresholdFactWriter",
     "VisualFactWriter",
+    "action_from_logits",
     "assemble_stack_manifest",
     "build_model_from_manifest",
     "build_stack_from_manifest",
+    "decision_action_is_valid",
     "load_fact_writer_checkpoint",
     "load_checkpoint_manifest",
     "load_manifest",

@@ -27,6 +27,13 @@ dependencies = [
 [project.optional-dependencies]
 crafter = ["crafter>=1.8.3"]
 torch = ["torch>=2.0"]
+train = [
+  "crafter>=1.8.3",
+  "gymnasium>=0.29",
+  "stable-baselines3>=2.0",
+  "sb3-contrib>=2.0",
+  "torch>=2.0",
+]
 test = ["pytest>=8.0"]
 dev = ["pytest>=8.0", "ruff>=0.5"]
 
@@ -39,6 +46,7 @@ embryo-assemble-stack = "embryo.models.stack:main"
 embryo-train-supervised = "embryo.run.train_supervised:main"
 embryo-supervised-memory-pipeline = "embryo.pipelines.supervised_memory:main"
 embryo-long-run-protocol = "embryo.run.long_run:main"
+embryo-train-crafter-survival = "embryo.train.crafter_survival:main"
 embryo-check-release = "embryo.run.release_check:main"
 
 [tool.setuptools.packages.find]

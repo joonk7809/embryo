@@ -1,1 +1,43 @@
 """Memory surfaces and router logic."""
+
+from embryo.memory.typed_recall import (
+    LOCALIZED_RESOURCE_SEEN,
+    CRAFTING_BENCH_RESOURCE,
+    PASSIVE_MATCH_CUE_SEEN,
+    REFERENCE_BENCH_PLACEMENT_PROVENANCE,
+    REFERENCE_PASSIVE_MATCH_RGB_PROVENANCE,
+    REFERENCE_WATER_RGB_PROVENANCE,
+    PassiveCueEntry,
+    PassiveCueMemory,
+    PlacedLandmarkMemory,
+    ResourceMemoryEntry,
+    ResourceNeedBelief,
+    ResourceRecallDecision,
+    ResourceRecallMemory,
+    localized_resource_fact,
+    passive_match_action_for_side,
+    passive_match_choice_visible,
+    passive_match_cue_fact_from_observation,
+    water_bearing_fact_from_observation,
+)
+
+__all__ = [
+    "LOCALIZED_RESOURCE_SEEN",
+    "CRAFTING_BENCH_RESOURCE",
+    "PASSIVE_MATCH_CUE_SEEN",
+    "REFERENCE_BENCH_PLACEMENT_PROVENANCE",
+    "REFERENCE_PASSIVE_MATCH_RGB_PROVENANCE",
+    "REFERENCE_WATER_RGB_PROVENANCE",
+    "PassiveCueEntry",
+    "PassiveCueMemory",
+    "PlacedLandmarkMemory",
+    "ResourceMemoryEntry",
+    "ResourceNeedBelief",
+    "ResourceRecallDecision",
+    "ResourceRecallMemory",
+    "localized_resource_fact",
+    "passive_match_action_for_side",
+    "passive_match_choice_visible",
+    "passive_match_cue_fact_from_observation",
+    "water_bearing_fact_from_observation",
+]

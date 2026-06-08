@@ -1,0 +1,40 @@
+runtime:
+  name: crafter_memory
+  deterministic_backend_patch: true
+  frame_size: [64, 64]
+  max_episode_steps: 10000
+
+dataset:
+  human_root: runs/data/crafter_human_dataset
+  max_examples: null
+
+bc:
+  enabled: false
+  epochs: 5
+  batch_size: 128
+  learning_rate: 0.0003
+  validation_fraction: 0.1
+  seed: 10000
+
+ppo:
+  algorithm: recurrent_ppo
+  policy: CnnLstmPolicy
+  total_timesteps: 1000000
+  learning_rate: 0.00025
+  n_steps: 2048
+  batch_size: 256
+  gamma: 0.99
+  gae_lambda: 0.95
+  clip_range: 0.2
+  ent_coef: 0.01
+  reward_mode: native
+  alive_bonus: 0.0
+  seed: 10000
+
+eval:
+  seed_start: 11000
+  seed_count: 16
+  horizon: 2048
+
+output:
+  path: runs/crafter_survival

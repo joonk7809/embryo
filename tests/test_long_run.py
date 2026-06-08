@@ -165,8 +165,9 @@ class LongRunProtocolTests(unittest.TestCase):
         manifest["runtime"]["seed_count"] = 4
         manifest["protocol"]["min_evaluable_seed_rate"] = 0.5
         ticks = []
+        corrupt_arms = ("query_memory_shuffled", "query_memory_stale", "query_memory_wrong_binding")
         for seed in (1, 2, 3, 4):
-            arms = ("query_memory_clean", "query_memory_shuffled", "query_memory_stale", "query_memory_wrong_binding") if seed == 1 else ("query_memory_clean",)
+            arms = ("query_memory_clean", *corrupt_arms) if seed == 1 else ("query_memory_clean",)
             for arm in arms:
                 ticks.append(
                     {
@@ -368,7 +369,6 @@ class LongRunProtocolTests(unittest.TestCase):
 
         cached_rows = [row for row in result["ticks"] if row["metrics"]["query_used_cached_fact"]]
         self.assertTrue(cached_rows)
-        self.assertGreater(len({row["metrics"]["query_content_hash"] for row in cached_rows}), 1)
         cached_by_arm = {row["actor"]["arm"]: row for row in cached_rows}
         self.assertEqual(set(cached_by_arm), set(arms))
         for row in cached_rows:
@@ -379,11 +379,25 @@ class LongRunProtocolTests(unittest.TestCase):
             self.assertIsNotNone(metrics["effective_center_patch_hash"])
             self.assertIsNotNone(metrics["effective_fact_value"])
             self.assertEqual(metrics["effective_memory_arm"], row["actor"]["arm"])
-        self.assertEqual(cached_by_arm["query_memory_shuffled"]["metrics"]["effective_candidate_score"], 0.0)
-        self.assertEqual(cached_by_arm["query_memory_wrong_binding"]["metrics"]["effective_candidate_score"], 0.0)
-        self.assertNotEqual(
-            cached_by_arm["query_memory_shuffled"]["metrics"]["effective_center_patch_hash"],
-            cached_by_arm["query_memory_wrong_binding"]["metrics"]["effective_center_patch_hash"],
+            self.assertIn("memory_residual_target_action", metrics)
+
+        clean = cached_by_arm["query_memory_clean"]["metrics"]
+        shuffled = cached_by_arm["query_memory_shuffled"]["metrics"]
+        stale = cached_by_arm["query_memory_stale"]["metrics"]
+        wrong_binding = cached_by_arm["query_memory_wrong_binding"]["metrics"]
+        self.assertEqual(clean["memory_residual_target_action"], "move_forward")
+        self.assertEqual(wrong_binding["memory_residual_target_action"], "turn_left")
+        self.assertIsNone(stale["memory_residual_target_action"])
+        self.assertFalse(clean["effective_invalidated"])
+        self.assertFalse(shuffled["effective_invalidated"])
+        self.assertTrue(stale["effective_invalidated"])
+        self.assertFalse(wrong_binding["effective_invalidated"])
+        self.assertNotEqual(clean["effective_center_patch_hash"], shuffled["effective_center_patch_hash"])
+        self.assertEqual(clean["effective_center_patch_hash"], wrong_binding["effective_center_patch_hash"])
+        self.assertEqual(clean["effective_center_patch_hash"], stale["effective_center_patch_hash"])
+        self.assertEqual(
+            len({row["metrics"]["query_content_hash"] for row in cached_by_arm.values()}),
+            len(arms),
         )
 
     def test_visual_anchor_scaffold_can_compute_memory_score_without_reward(self) -> None:

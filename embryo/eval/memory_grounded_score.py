@@ -7,7 +7,7 @@ budgets, and penalizes progress from corrupted/nonmemory behavior.
 
 from __future__ import annotations
 
-from collections import Counter, defaultdict
+from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -85,8 +85,8 @@ def compute_memory_grounded_scores(
             }
         )
 
-    scores = {row["arm"]: row["memory_grounded_score"] for row in rows}
-    raw = {row["arm"]: row["raw_progress"] for row in rows}
+    scores: dict[str, float] = {str(row["arm"]): numeric(row["memory_grounded_score"]) for row in rows}
+    raw: dict[str, float] = {str(row["arm"]): numeric(row["raw_progress"]) for row in rows}
     gaps = clean_minus_controls(scores, cfg.clean_arm, cfg.control_arms)
     raw_gaps = clean_minus_controls(raw, cfg.clean_arm, cfg.control_arms)
     return {
@@ -97,7 +97,7 @@ def compute_memory_grounded_scores(
         "raw_progress_by_arm": raw,
         "memory_grounded_gaps_clean_minus_controls": gaps,
         "raw_gaps_clean_minus_controls": raw_gaps,
-        "best_arm": max(scores, key=scores.get) if scores else None,
+        "best_arm": max(scores.items(), key=lambda item: item[1])[0] if scores else None,
         "anchor_count": len(anchors),
         "matched_exploration": matched_exploration_summary(rows, cfg),
     }
@@ -142,10 +142,13 @@ def index_ticks(ticks: Sequence[Mapping[str, Any]]) -> dict[tuple[str, int, str,
 
 
 def group_episode_rows(ticks: Sequence[Mapping[str, Any]]) -> dict[tuple[str, int, str], list[Mapping[str, Any]]]:
-    grouped: dict[tuple[str, int, str], list[Mapping[str, Any]]] = defaultdict(list)
+    grouped: dict[tuple[str, int, str], list[Mapping[str, Any]]] = {}
     for row in ticks:
         arm, seed, episode, _ = row_key(row)
-        grouped[(arm, seed, episode)].append(row)
+        key = (arm, seed, episode)
+        if key not in grouped:
+            grouped[key] = []
+        grouped[key].append(row)
     for rows in grouped.values():
         rows.sort(key=lambda row: int(row.get("tick", 0)))
     return grouped
@@ -226,20 +229,27 @@ def followthrough_for_arm(
 
 def raw_progress_by_arm(ticks: Sequence[Mapping[str, Any]], episodes: Sequence[Mapping[str, Any]]) -> dict[str, float]:
     if episodes:
-        totals: dict[str, list[float]] = defaultdict(list)
+        totals: dict[str, float] = {}
+        counts: dict[str, int] = {}
         for episode in episodes:
             arm = str(episode.get("arm"))
-            totals[arm].append(numeric(episode.get("diagnostic_progress_score_teacher_only")))
-        return {arm: sum(values) / len(values) for arm, values in totals.items() if values}
-    totals = defaultdict(float)
+            totals[arm] = totals.get(arm, 0.0) + numeric(episode.get("diagnostic_progress_score_teacher_only"))
+            counts[arm] = counts.get(arm, 0) + 1
+        return {arm: total / counts[arm] for arm, total in totals.items() if counts.get(arm, 0)}
+    totals: dict[str, float] = {}
     for row in ticks:
-        totals[str(row.get("arm"))] += numeric(row.get("diagnostic_progress_delta_teacher_only"))
-    return dict(totals)
+        arm = str(row.get("arm"))
+        totals[arm] = totals.get(arm, 0.0) + numeric(row.get("diagnostic_progress_delta_teacher_only"))
+    return totals
 
 
 def clean_minus_controls(scores: Mapping[str, float], clean_arm: str, controls: Sequence[str]) -> dict[str, float | None]:
     clean = scores.get(clean_arm)
-    return {arm: None if clean is None or scores.get(arm) is None else round(clean - float(scores[arm]), 4) for arm in controls}
+    rows: dict[str, float | None] = {}
+    for arm in controls:
+        control = scores.get(arm)
+        rows[arm] = None if clean is None or control is None else round(clean - control, 4)
+    return rows
 
 
 def matched_exploration_summary(rows: Sequence[Mapping[str, Any]], cfg: ScoreConfig) -> dict[str, Any]:

@@ -1,0 +1,40 @@
+runtime:
+  name: popgym_repeat_first
+  task: repeat_first_medium
+  split: dev
+  seed_start: 12000
+  seed_count: 128
+
+actor:
+  name: popgym_recurrent
+  checkpoint: runs/popgym_recurrent_repeat_first/checkpoint
+  policy_mode: argmax
+  device: cpu
+  memory_residual_bias: 8.0
+
+protocol:
+  horizons: [256]
+  max_episodes_per_seed: 1
+  detail_ticks: true
+  popgym_repeat_first:
+    ttl: 512
+    h_lstm: 1
+    min_ere_count: 100
+    min_ere_episode_rate: 0.9
+    recall_window: 1
+
+arms:
+  - popgym_repeat_first_off
+  - popgym_repeat_first_clean
+  - popgym_repeat_first_shuffled
+  - popgym_repeat_first_stale
+  - popgym_repeat_first_wrong_binding
+
+metrics:
+  survival: true
+  valid_actions: true
+  loop_rate: true
+  event_self_trigger: true
+  memory_grounded_score: false
+  popgym_repeat_first: true
+  contamination: true

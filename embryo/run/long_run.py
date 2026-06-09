@@ -132,6 +132,7 @@ def run_long_run_episode(
         horizon=horizon,
         seed=int(actor["seed"]),
         deterministic_backend_patch=runtime_config.get("deterministic_backend_patch"),
+        runtime_options={key: runtime_config[key] for key in ("task",) if key in runtime_config},
     )
     frozen_actor = None
     try:
@@ -145,6 +146,9 @@ def run_long_run_episode(
         water_recall_config = protocol.get("water_recall", {}) if isinstance(protocol.get("water_recall", {}), Mapping) else {}
         bench_recall_config = protocol.get("bench_recall", {}) if isinstance(protocol.get("bench_recall", {}), Mapping) else {}
         passive_match_config = protocol.get("passive_match", {}) if isinstance(protocol.get("passive_match", {}), Mapping) else {}
+        popgym_repeat_first_config = (
+            protocol.get("popgym_repeat_first", {}) if isinstance(protocol.get("popgym_repeat_first", {}), Mapping) else {}
+        )
         state = EpisodeState(
             seed=int(actor["seed"]),
             arm=str(actor["arm"]),
@@ -152,6 +156,7 @@ def run_long_run_episode(
             water_recall_config=water_recall_config,
             bench_recall_config=bench_recall_config,
             passive_match_config=passive_match_config,
+            popgym_repeat_first_config=popgym_repeat_first_config,
         )
         rows: list[dict[str, Any]] = []
         for tick in range(horizon):
@@ -199,14 +204,16 @@ def make_runtime_for_horizon(
     horizon: int,
     seed: int | None = None,
     deterministic_backend_patch: Any = None,
+    runtime_options: Mapping[str, Any] | None = None,
 ) -> RuntimeAdapter:
+    options = dict(runtime_options or {})
     for kwargs in (
-        {"max_steps": horizon, "seed": seed, "deterministic_backend_patch": deterministic_backend_patch},
-        {"max_steps": horizon, "seed": seed},
-        {"seed": seed, "deterministic_backend_patch": deterministic_backend_patch},
-        {"max_steps": horizon},
-        {"seed": seed},
-        {},
+        {"max_steps": horizon, "seed": seed, "deterministic_backend_patch": deterministic_backend_patch, **options},
+        {"max_steps": horizon, "seed": seed, **options},
+        {"seed": seed, "deterministic_backend_patch": deterministic_backend_patch, **options},
+        {"max_steps": horizon, **options},
+        {"seed": seed, **options},
+        {**options},
     ):
         clean_kwargs = {key: value for key, value in kwargs.items() if value is not None}
         try:

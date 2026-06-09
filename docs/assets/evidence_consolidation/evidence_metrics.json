@@ -1,0 +1,975 @@
+{
+  "autoencode": {
+    "gaps": [
+      1,
+      2,
+      3,
+      4,
+      10,
+      20,
+      27,
+      40,
+      52
+    ],
+    "hand_coded_series": {
+      "clean": [
+        {
+          "gap": 1,
+          "success_rate": 1.0
+        },
+        {
+          "gap": 2,
+          "success_rate": 1.0
+        },
+        {
+          "gap": 3,
+          "success_rate": 1.0
+        },
+        {
+          "gap": 4,
+          "success_rate": 1.0
+        },
+        {
+          "gap": 10,
+          "success_rate": 1.0
+        },
+        {
+          "gap": 20,
+          "success_rate": 1.0
+        },
+        {
+          "gap": 27,
+          "success_rate": 1.0
+        },
+        {
+          "gap": 40,
+          "success_rate": 1.0
+        },
+        {
+          "gap": 52,
+          "success_rate": 1.0
+        }
+      ],
+      "content_corrupt": [
+        {
+          "gap": 1,
+          "success_rate": 0.0
+        },
+        {
+          "gap": 2,
+          "success_rate": 0.0
+        },
+        {
+          "gap": 3,
+          "success_rate": 0.0
+        },
+        {
+          "gap": 4,
+          "success_rate": 0.0
+        },
+        {
+          "gap": 10,
+          "success_rate": 0.0
+        },
+        {
+          "gap": 20,
+          "success_rate": 0.0
+        },
+        {
+          "gap": 27,
+          "success_rate": 0.0
+        },
+        {
+          "gap": 40,
+          "success_rate": 0.0
+        },
+        {
+          "gap": 52,
+          "success_rate": 0.0
+        }
+      ],
+      "off": [
+        {
+          "gap": 1,
+          "success_rate": 0.992188
+        },
+        {
+          "gap": 2,
+          "success_rate": 1.0
+        },
+        {
+          "gap": 3,
+          "success_rate": 0.960938
+        },
+        {
+          "gap": 4,
+          "success_rate": 0.796875
+        },
+        {
+          "gap": 10,
+          "success_rate": 0.335938
+        },
+        {
+          "gap": 20,
+          "success_rate": 0.304688
+        },
+        {
+          "gap": 27,
+          "success_rate": 0.25
+        },
+        {
+          "gap": 40,
+          "success_rate": 0.257812
+        },
+        {
+          "gap": 52,
+          "success_rate": 0.25
+        }
+      ],
+      "order_corrupt": [
+        {
+          "gap": 1,
+          "success_rate": 0.25
+        },
+        {
+          "gap": 2,
+          "success_rate": 0.234375
+        },
+        {
+          "gap": 3,
+          "success_rate": 0.273438
+        },
+        {
+          "gap": 4,
+          "success_rate": 0.257812
+        },
+        {
+          "gap": 10,
+          "success_rate": 0.195312
+        },
+        {
+          "gap": 20,
+          "success_rate": 0.257812
+        },
+        {
+          "gap": 27,
+          "success_rate": 0.28125
+        },
+        {
+          "gap": 40,
+          "success_rate": 0.234375
+        },
+        {
+          "gap": 52,
+          "success_rate": 0.25
+        }
+      ],
+      "shuffled": [
+        {
+          "gap": 1,
+          "success_rate": 0.203125
+        },
+        {
+          "gap": 2,
+          "success_rate": 0.210938
+        },
+        {
+          "gap": 3,
+          "success_rate": 0.242188
+        },
+        {
+          "gap": 4,
+          "success_rate": 0.210938
+        },
+        {
+          "gap": 10,
+          "success_rate": 0.25
+        },
+        {
+          "gap": 20,
+          "success_rate": 0.265625
+        },
+        {
+          "gap": 27,
+          "success_rate": 0.234375
+        },
+        {
+          "gap": 40,
+          "success_rate": 0.1875
+        },
+        {
+          "gap": 52,
+          "success_rate": 0.195312
+        }
+      ]
+    },
+    "hand_coded_source": "runs/popgym_autoencode_recurrent/memory_curve.json",
+    "hand_coded_status": "GO_popgym_autoencode_memory_curve_supported",
+    "hand_coded_summary_by_arm": {
+      "autoencode_memory_clean": {
+        "available_count": 1152,
+        "count": 1152,
+        "success_rate": 1.0
+      },
+      "autoencode_memory_content_corrupt": {
+        "available_count": 1152,
+        "count": 1152,
+        "success_rate": 0.0
+      },
+      "autoencode_memory_off": {
+        "available_count": 1152,
+        "count": 1152,
+        "success_rate": 0.572049
+      },
+      "autoencode_memory_order_corrupt": {
+        "available_count": 1152,
+        "count": 1152,
+        "success_rate": 0.248264
+      },
+      "autoencode_memory_shuffled": {
+        "available_count": 1152,
+        "count": 1152,
+        "success_rate": 0.222222
+      }
+    },
+    "learned_series": {
+      "content_corrupt": [
+        {
+          "gap": 1,
+          "success_rate": 0.0
+        },
+        {
+          "gap": 2,
+          "success_rate": 0.0
+        },
+        {
+          "gap": 3,
+          "success_rate": 0.0
+        },
+        {
+          "gap": 4,
+          "success_rate": 0.0
+        },
+        {
+          "gap": 10,
+          "success_rate": 0.0
+        },
+        {
+          "gap": 20,
+          "success_rate": 0.0
+        },
+        {
+          "gap": 27,
+          "success_rate": 0.0
+        },
+        {
+          "gap": 40,
+          "success_rate": 0.0
+        },
+        {
+          "gap": 52,
+          "success_rate": 0.0
+        }
+      ],
+      "hand_coded_clean": [
+        {
+          "gap": 1,
+          "success_rate": 1.0
+        },
+        {
+          "gap": 2,
+          "success_rate": 1.0
+        },
+        {
+          "gap": 3,
+          "success_rate": 1.0
+        },
+        {
+          "gap": 4,
+          "success_rate": 1.0
+        },
+        {
+          "gap": 10,
+          "success_rate": 1.0
+        },
+        {
+          "gap": 20,
+          "success_rate": 1.0
+        },
+        {
+          "gap": 27,
+          "success_rate": 1.0
+        },
+        {
+          "gap": 40,
+          "success_rate": 1.0
+        },
+        {
+          "gap": 52,
+          "success_rate": 1.0
+        }
+      ],
+      "learned_clean": [
+        {
+          "gap": 1,
+          "success_rate": 1.0
+        },
+        {
+          "gap": 2,
+          "success_rate": 1.0
+        },
+        {
+          "gap": 3,
+          "success_rate": 1.0
+        },
+        {
+          "gap": 4,
+          "success_rate": 1.0
+        },
+        {
+          "gap": 10,
+          "success_rate": 1.0
+        },
+        {
+          "gap": 20,
+          "success_rate": 1.0
+        },
+        {
+          "gap": 27,
+          "success_rate": 1.0
+        },
+        {
+          "gap": 40,
+          "success_rate": 1.0
+        },
+        {
+          "gap": 52,
+          "success_rate": 1.0
+        }
+      ],
+      "off": [
+        {
+          "gap": 1,
+          "success_rate": 0.992188
+        },
+        {
+          "gap": 2,
+          "success_rate": 1.0
+        },
+        {
+          "gap": 3,
+          "success_rate": 0.960938
+        },
+        {
+          "gap": 4,
+          "success_rate": 0.796875
+        },
+        {
+          "gap": 10,
+          "success_rate": 0.335938
+        },
+        {
+          "gap": 20,
+          "success_rate": 0.304688
+        },
+        {
+          "gap": 27,
+          "success_rate": 0.25
+        },
+        {
+          "gap": 40,
+          "success_rate": 0.257812
+        },
+        {
+          "gap": 52,
+          "success_rate": 0.25
+        }
+      ],
+      "order_corrupt": [
+        {
+          "gap": 1,
+          "success_rate": 0.25
+        },
+        {
+          "gap": 2,
+          "success_rate": 0.234375
+        },
+        {
+          "gap": 3,
+          "success_rate": 0.273438
+        },
+        {
+          "gap": 4,
+          "success_rate": 0.257812
+        },
+        {
+          "gap": 10,
+          "success_rate": 0.195312
+        },
+        {
+          "gap": 20,
+          "success_rate": 0.257812
+        },
+        {
+          "gap": 27,
+          "success_rate": 0.28125
+        },
+        {
+          "gap": 40,
+          "success_rate": 0.234375
+        },
+        {
+          "gap": 52,
+          "success_rate": 0.25
+        }
+      ],
+      "shuffled": [
+        {
+          "gap": 1,
+          "success_rate": 0.226562
+        },
+        {
+          "gap": 2,
+          "success_rate": 0.179688
+        },
+        {
+          "gap": 3,
+          "success_rate": 0.25
+        },
+        {
+          "gap": 4,
+          "success_rate": 0.203125
+        },
+        {
+          "gap": 10,
+          "success_rate": 0.28125
+        },
+        {
+          "gap": 20,
+          "success_rate": 0.28125
+        },
+        {
+          "gap": 27,
+          "success_rate": 0.21875
+        },
+        {
+          "gap": 40,
+          "success_rate": 0.226562
+        },
+        {
+          "gap": 52,
+          "success_rate": 0.25
+        }
+      ]
+    },
+    "learned_source": "runs/popgym_autoencode_recurrent/learned_memory_curve.json",
+    "learned_status": "GO_popgym_autoencode_learned_memory_supported",
+    "learned_summary_by_arm": {
+      "autoencode_hand_coded_memory_clean": {
+        "available_count": 1152,
+        "count": 1152,
+        "success_rate": 1.0
+      },
+      "autoencode_learned_memory_clean": {
+        "available_count": 1152,
+        "count": 1152,
+        "success_rate": 1.0
+      },
+      "autoencode_learned_memory_content_corrupt": {
+        "available_count": 1152,
+        "count": 1152,
+        "success_rate": 0.0
+      },
+      "autoencode_learned_memory_order_corrupt": {
+        "available_count": 1152,
+        "count": 1152,
+        "success_rate": 0.248264
+      },
+      "autoencode_learned_memory_shuffled": {
+        "available_count": 1152,
+        "count": 1152,
+        "success_rate": 0.235243
+      },
+      "autoencode_memory_off": {
+        "available_count": 1152,
+        "count": 1152,
+        "success_rate": 0.572049
+      }
+    },
+    "seed_count": 128
+  },
+  "count_recall": {
+    "arms": {
+      "clean": 1.0,
+      "no_memory": 0.053744,
+      "oracle": 1.0,
+      "shuffled": 0.206295,
+      "stale": 0.103865,
+      "wrong_binding": 0.211277
+    },
+    "decision": "GO_popgym_count_recall_injection_supported",
+    "episode_ci": {
+      "count_recall_memory_clean": {
+        "ci95": 0.0,
+        "mean": 1.0,
+        "n": 64
+      },
+      "count_recall_memory_shuffled": {
+        "ci95": 0.010051,
+        "mean": 0.206295,
+        "n": 64
+      },
+      "count_recall_memory_stale": {
+        "ci95": 0.006417,
+        "mean": 0.103865,
+        "n": 64
+      },
+      "count_recall_memory_wrong_binding": {
+        "ci95": 0.010061,
+        "mean": 0.211277,
+        "n": 64
+      },
+      "count_recall_no_memory": {
+        "ci95": 0.003914,
+        "mean": 0.053744,
+        "n": 64
+      },
+      "count_recall_oracle_eval_only": {
+        "ci95": 0.0,
+        "mean": 1.0,
+        "n": 64
+      }
+    },
+    "pairwise": {
+      "clean_minus_corrupt_accuracy": {
+        "count_recall_memory_shuffled": 0.793705,
+        "count_recall_memory_stale": 0.896135,
+        "count_recall_memory_wrong_binding": 0.788723
+      },
+      "clean_minus_corrupt_reward": {
+        "count_recall_memory_shuffled": 1.587409,
+        "count_recall_memory_stale": 1.792271,
+        "count_recall_memory_wrong_binding": 1.577446
+      },
+      "clean_minus_no_memory_accuracy": 0.946256,
+      "clean_minus_no_memory_reward": 1.892512,
+      "clean_minus_oracle_accuracy": 0.0
+    },
+    "runtime": {
+      "action_space_patch": "count_recall_inclusive_max_count_action_space_v0",
+      "name": "popgym_count_recall",
+      "seed_count": 64,
+      "seed_start": 12000,
+      "task": "count_recall_hard"
+    },
+    "source": "runs/popgym_count_recall_injection/popgym_count_recall_summary.json",
+    "source_receipt": {
+      "available": true,
+      "module": "popgym.envs.count_recall",
+      "reproduction": {
+        "action_space": "Discrete(16)",
+        "action_space_contains_target": false,
+        "action_space_n": 16,
+        "max_card_count": 16,
+        "query": 7,
+        "reward_for_target": 0.004830917874396135,
+        "reward_positive": true,
+        "seed": 12000,
+        "target_count": 16,
+        "task": "CountRecallHard",
+        "terminated": false,
+        "tick": 191,
+        "truncated": false
+      },
+      "snippets": {
+        "action_space_line": {
+          "line": 75,
+          "text": "self.action_space = gym.spaces.Discrete(self.max_card_count)"
+        },
+        "max_card_count_line": {
+          "line": 62,
+          "text": "self.max_card_count = int(self.value_deck.num_cards / self.num_distinct_cards)"
+        },
+        "reward_line": {
+          "line": 103,
+          "text": "reward = 1 if action == prev_count else -1"
+        },
+        "target_count_line": {
+          "line": 98,
+          "text": "prev_count = self.counts[self.prev_query]"
+        }
+      }
+    }
+  },
+  "gridworld": {
+    "arms": {
+      "memory_clean": {
+        "episode_count": 320,
+        "failed_memory_goal_rate": 0.0,
+        "goal_injection_accuracy": 1.0,
+        "mean_drawers_opened_to_success": 1.0,
+        "mean_episode_steps": 5.54375,
+        "mean_path_efficiency": 1.0,
+        "mean_steps_to_retrieve": 5.54375,
+        "mean_wrong_drawers_before_success": 0.0,
+        "memory_goal_commit_rate": 1.0,
+        "memory_hit_rate": 1.0,
+        "query_success_rate": 1.0,
+        "retrieval_success_rate": 1.0,
+        "wrong_drawer_rate": 0.0
+      },
+      "memory_shuffled_location": {
+        "episode_count": 320,
+        "failed_memory_goal_rate": 1.0,
+        "goal_injection_accuracy": 0.0,
+        "mean_drawers_opened_to_success": 8.146875,
+        "mean_episode_steps": 42.146875,
+        "mean_path_efficiency": 0.199734,
+        "mean_steps_to_retrieve": 42.146875,
+        "mean_wrong_drawers_before_success": 7.146875,
+        "memory_goal_commit_rate": 1.0,
+        "memory_hit_rate": 1.0,
+        "query_success_rate": 1.0,
+        "retrieval_success_rate": 1.0,
+        "wrong_drawer_rate": 1.0
+      },
+      "memory_stale": {
+        "episode_count": 320,
+        "failed_memory_goal_rate": 1.0,
+        "goal_injection_accuracy": 0.0,
+        "mean_drawers_opened_to_success": 8.11875,
+        "mean_episode_steps": 42.015625,
+        "mean_path_efficiency": 0.198368,
+        "mean_steps_to_retrieve": 42.015625,
+        "mean_wrong_drawers_before_success": 7.11875,
+        "memory_goal_commit_rate": 1.0,
+        "memory_hit_rate": 1.0,
+        "query_success_rate": 1.0,
+        "retrieval_success_rate": 1.0,
+        "wrong_drawer_rate": 1.0
+      },
+      "memory_wrong_binding": {
+        "episode_count": 320,
+        "failed_memory_goal_rate": 1.0,
+        "goal_injection_accuracy": 0.0,
+        "mean_drawers_opened_to_success": 8.146875,
+        "mean_episode_steps": 42.2875,
+        "mean_path_efficiency": 0.199462,
+        "mean_steps_to_retrieve": 42.2875,
+        "mean_wrong_drawers_before_success": 7.146875,
+        "memory_goal_commit_rate": 1.0,
+        "memory_hit_rate": 1.0,
+        "query_success_rate": 1.0,
+        "retrieval_success_rate": 1.0,
+        "wrong_drawer_rate": 1.0
+      },
+      "no_memory_search": {
+        "episode_count": 320,
+        "failed_memory_goal_rate": 0.0,
+        "goal_injection_accuracy": null,
+        "mean_drawers_opened_to_success": 7.64375,
+        "mean_episode_steps": 39.05625,
+        "mean_path_efficiency": 0.28518,
+        "mean_steps_to_retrieve": 39.05625,
+        "mean_wrong_drawers_before_success": 6.64375,
+        "memory_goal_commit_rate": 0.0,
+        "memory_hit_rate": 0.0,
+        "query_success_rate": 0.0,
+        "retrieval_success_rate": 1.0,
+        "wrong_drawer_rate": 0.909375
+      },
+      "oracle_goal_eval_only": {
+        "episode_count": 320,
+        "failed_memory_goal_rate": 0.0,
+        "goal_injection_accuracy": 1.0,
+        "mean_drawers_opened_to_success": 1.0,
+        "mean_episode_steps": 5.54375,
+        "mean_path_efficiency": 1.0,
+        "mean_steps_to_retrieve": 5.54375,
+        "mean_wrong_drawers_before_success": 0.0,
+        "memory_goal_commit_rate": 1.0,
+        "memory_hit_rate": 0.0,
+        "query_success_rate": 1.0,
+        "retrieval_success_rate": 1.0,
+        "wrong_drawer_rate": 0.0
+      }
+    },
+    "curve": [
+      {
+        "clean_drawers": 1.0,
+        "clean_minus_search_drawers": 2.4375,
+        "drawer_count": 6,
+        "search_drawers": 3.4375,
+        "wrong_binding_drawers": 3.921875,
+        "wrong_binding_minus_search_steps": 3.625
+      },
+      {
+        "clean_drawers": 1.0,
+        "clean_minus_search_drawers": 4.203125,
+        "drawer_count": 10,
+        "search_drawers": 5.203125,
+        "wrong_binding_drawers": 5.71875,
+        "wrong_binding_minus_search_steps": 1.859375
+      },
+      {
+        "clean_drawers": 1.0,
+        "clean_minus_search_drawers": 6.28125,
+        "drawer_count": 14,
+        "search_drawers": 7.28125,
+        "wrong_binding_drawers": 7.734375,
+        "wrong_binding_minus_search_steps": 2.765625
+      },
+      {
+        "clean_drawers": 1.0,
+        "clean_minus_search_drawers": 8.859375,
+        "drawer_count": 18,
+        "search_drawers": 9.859375,
+        "wrong_binding_drawers": 10.359375,
+        "wrong_binding_minus_search_steps": 3.859375
+      },
+      {
+        "clean_drawers": 1.0,
+        "clean_minus_search_drawers": 11.4375,
+        "drawer_count": 22,
+        "search_drawers": 12.4375,
+        "wrong_binding_drawers": 13.0,
+        "wrong_binding_minus_search_steps": 4.046875
+      }
+    ],
+    "decision": "GO_gridworld_injection_supported",
+    "drawers_opened_ci": {
+      "memory_clean": {
+        "ci95": 0.0,
+        "mean": 1.0,
+        "n": 320
+      },
+      "memory_shuffled_location": {
+        "ci95": 0.567246,
+        "mean": 8.146875,
+        "n": 320
+      },
+      "memory_stale": {
+        "ci95": 0.563364,
+        "mean": 8.11875,
+        "n": 320
+      },
+      "memory_wrong_binding": {
+        "ci95": 0.567644,
+        "mean": 8.146875,
+        "n": 320
+      },
+      "no_memory_search": {
+        "ci95": 0.590433,
+        "mean": 7.64375,
+        "n": 320
+      },
+      "oracle_goal_eval_only": {
+        "ci95": 0.0,
+        "mean": 1.0,
+        "n": 320
+      }
+    },
+    "drawers_opened_ci_by_count": {
+      "10": {
+        "memory_clean": {
+          "ci95": 0.0,
+          "mean": 1.0,
+          "n": 64
+        },
+        "memory_shuffled_location": {
+          "ci95": 0.635592,
+          "mean": 5.75,
+          "n": 64
+        },
+        "memory_stale": {
+          "ci95": 0.622995,
+          "mean": 5.703125,
+          "n": 64
+        },
+        "memory_wrong_binding": {
+          "ci95": 0.622672,
+          "mean": 5.71875,
+          "n": 64
+        },
+        "no_memory_search": {
+          "ci95": 0.694585,
+          "mean": 5.203125,
+          "n": 64
+        },
+        "oracle_goal_eval_only": {
+          "ci95": 0.0,
+          "mean": 1.0,
+          "n": 64
+        }
+      },
+      "14": {
+        "memory_clean": {
+          "ci95": 0.0,
+          "mean": 1.0,
+          "n": 64
+        },
+        "memory_shuffled_location": {
+          "ci95": 0.870731,
+          "mean": 7.8125,
+          "n": 64
+        },
+        "memory_stale": {
+          "ci95": 0.874008,
+          "mean": 7.8125,
+          "n": 64
+        },
+        "memory_wrong_binding": {
+          "ci95": 0.876585,
+          "mean": 7.734375,
+          "n": 64
+        },
+        "no_memory_search": {
+          "ci95": 0.94885,
+          "mean": 7.28125,
+          "n": 64
+        },
+        "oracle_goal_eval_only": {
+          "ci95": 0.0,
+          "mean": 1.0,
+          "n": 64
+        }
+      },
+      "18": {
+        "memory_clean": {
+          "ci95": 0.0,
+          "mean": 1.0,
+          "n": 64
+        },
+        "memory_shuffled_location": {
+          "ci95": 1.228859,
+          "mean": 10.28125,
+          "n": 64
+        },
+        "memory_stale": {
+          "ci95": 1.216194,
+          "mean": 10.34375,
+          "n": 64
+        },
+        "memory_wrong_binding": {
+          "ci95": 1.220221,
+          "mean": 10.359375,
+          "n": 64
+        },
+        "no_memory_search": {
+          "ci95": 1.295585,
+          "mean": 9.859375,
+          "n": 64
+        },
+        "oracle_goal_eval_only": {
+          "ci95": 0.0,
+          "mean": 1.0,
+          "n": 64
+        }
+      },
+      "22": {
+        "memory_clean": {
+          "ci95": 0.0,
+          "mean": 1.0,
+          "n": 64
+        },
+        "memory_shuffled_location": {
+          "ci95": 1.480007,
+          "mean": 12.984375,
+          "n": 64
+        },
+        "memory_stale": {
+          "ci95": 1.490072,
+          "mean": 12.796875,
+          "n": 64
+        },
+        "memory_wrong_binding": {
+          "ci95": 1.479046,
+          "mean": 13.0,
+          "n": 64
+        },
+        "no_memory_search": {
+          "ci95": 1.557413,
+          "mean": 12.4375,
+          "n": 64
+        },
+        "oracle_goal_eval_only": {
+          "ci95": 0.0,
+          "mean": 1.0,
+          "n": 64
+        }
+      },
+      "6": {
+        "memory_clean": {
+          "ci95": 0.0,
+          "mean": 1.0,
+          "n": 64
+        },
+        "memory_shuffled_location": {
+          "ci95": 0.35388,
+          "mean": 3.90625,
+          "n": 64
+        },
+        "memory_stale": {
+          "ci95": 0.346138,
+          "mean": 3.9375,
+          "n": 64
+        },
+        "memory_wrong_binding": {
+          "ci95": 0.363406,
+          "mean": 3.921875,
+          "n": 64
+        },
+        "no_memory_search": {
+          "ci95": 0.434064,
+          "mean": 3.4375,
+          "n": 64
+        },
+        "oracle_goal_eval_only": {
+          "ci95": 0.0,
+          "mean": 1.0,
+          "n": 64
+        }
+      }
+    },
+    "pairwise": {
+      "clean_minus_corrupt_success": {
+        "memory_shuffled_location": 0.0,
+        "memory_stale": 0.0,
+        "memory_wrong_binding": 0.0
+      },
+      "clean_minus_no_memory_drawers_opened": 6.64375,
+      "clean_minus_no_memory_steps": 33.5125,
+      "clean_minus_no_memory_success": 0.0,
+      "drawer_count_sweep": {
+        "drawer_counts": [
+          6,
+          10,
+          14,
+          18,
+          22
+        ],
+        "first_clean_minus_no_memory_drawers": 2.4375,
+        "gap_growth_drawers": 9.0,
+        "last_clean_minus_no_memory_drawers": 11.4375,
+        "last_wrong_binding_minus_no_memory_steps": 4.046875
+      },
+      "wrong_binding_minus_no_memory_steps": 3.23125
+    },
+    "runtime": {
+      "drawer_counts": [
+        6,
+        10,
+        14,
+        18,
+        22
+      ],
+      "height": 7,
+      "name": "gridworld_kitchen",
+      "object_count": 4,
+      "seed_count": 64,
+      "seed_start": 12000,
+      "width": 7
+    },
+    "source": "runs/gridworld_kitchen_injection/gridworld_injection_summary.json"
+  }
+}

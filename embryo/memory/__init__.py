@@ -20,6 +20,34 @@ from embryo.memory.typed_recall import (
     passive_match_cue_fact_from_observation,
     water_bearing_fact_from_observation,
 )
+from embryo.memory.popgym_repeat_first import (
+    POPGYM_REPEAT_FIRST_TARGET,
+    REFERENCE_POPGYM_REPEAT_FIRST_PROVENANCE,
+    RepeatFirstEntry,
+    RepeatFirstMemory,
+    repeat_first_action_for_suit,
+    repeat_first_observed_suit,
+    repeat_first_shuffled_suit,
+    repeat_first_suit_from_action,
+    repeat_first_target_fact_from_observation,
+    repeat_first_wrong_suit,
+)
+from embryo.memory.popgym_autoencode import OrderedSequenceMemory
+from embryo.memory.popgym_count_recall import (
+    REFERENCE_POPGYM_COUNT_RECALL_PROVENANCE,
+    CountRecallMemory,
+    CountRecallObservation,
+    count_recall_content_hash,
+    count_recall_observation,
+    count_recall_shuffled_query,
+    count_recall_wrong_binding_query,
+)
+from embryo.memory.gridworld_kitchen import (
+    GRIDWORLD_OBJECT_LOCATION_PROVENANCE,
+    GridworldLocationEntry,
+    GridworldObjectLocationMemory,
+    gridworld_location_from_observation,
+)
 
 __all__ = [
     "LOCALIZED_RESOURCE_SEEN",
@@ -40,4 +68,26 @@ __all__ = [
     "passive_match_choice_visible",
     "passive_match_cue_fact_from_observation",
     "water_bearing_fact_from_observation",
+    "POPGYM_REPEAT_FIRST_TARGET",
+    "REFERENCE_POPGYM_REPEAT_FIRST_PROVENANCE",
+    "RepeatFirstEntry",
+    "RepeatFirstMemory",
+    "repeat_first_action_for_suit",
+    "repeat_first_observed_suit",
+    "repeat_first_shuffled_suit",
+    "repeat_first_suit_from_action",
+    "repeat_first_target_fact_from_observation",
+    "repeat_first_wrong_suit",
+    "OrderedSequenceMemory",
+    "REFERENCE_POPGYM_COUNT_RECALL_PROVENANCE",
+    "CountRecallMemory",
+    "CountRecallObservation",
+    "count_recall_content_hash",
+    "count_recall_observation",
+    "count_recall_shuffled_query",
+    "count_recall_wrong_binding_query",
+    "GRIDWORLD_OBJECT_LOCATION_PROVENANCE",
+    "GridworldLocationEntry",
+    "GridworldObjectLocationMemory",
+    "gridworld_location_from_observation",
 ]

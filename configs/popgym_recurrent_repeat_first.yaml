@@ -1,0 +1,34 @@
+runtime:
+  name: popgym_repeat_first
+  task: repeat_first_medium
+
+splits:
+  train:
+    seed_start: 10000
+    seed_count: 512
+  dev:
+    seed_start: 11000
+    seed_count: 128
+  test:
+    seed_start: 12000
+    seed_count: 128
+
+model:
+  action_count: 4
+  embedding_dim: 16
+  hidden_size: 32
+
+training:
+  seed: 20260608
+  train_max_steps: 96
+  epochs: 30
+  batch_size: 64
+  learning_rate: 0.01
+
+evaluation:
+  max_steps: 256
+  competence_max_gap: 32
+  min_short_success_rate: 0.90
+  chance_success_rate: 0.25
+  falloff_tolerance: 0.05
+  falloff_tail_bins: 8

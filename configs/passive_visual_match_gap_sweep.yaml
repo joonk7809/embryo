@@ -1,0 +1,56 @@
+runtime:
+  name: passive_visual_match
+  split: dev
+  seed_start: 11000
+  seed_count: 256
+
+protocol:
+  horizons:
+    - 2
+    - 3
+    - 4
+    - 5
+    - 6
+    - 7
+    - 8
+    - 9
+    - 10
+    - 11
+    - 12
+    - 13
+    - 14
+    - 15
+    - 16
+    - 17
+    - 18
+    - 19
+    - 20
+    - 21
+    - 22
+    - 23
+    - 24
+    - 25
+  max_episodes_per_seed: 1
+  detail_ticks: true
+  passive_match:
+    ttl: 128
+    h_lstm: 1
+    min_ere_count: 30
+    min_ere_episode_rate: 0.9
+    recall_window: 1
+
+arms:
+  - passive_match_off
+  - passive_match_clean
+  - passive_match_shuffled
+  - passive_match_stale
+  - passive_match_wrong_binding
+
+metrics:
+  survival: true
+  valid_actions: true
+  loop_rate: true
+  event_self_trigger: true
+  memory_grounded_score: false
+  passive_match: true
+  contamination: true

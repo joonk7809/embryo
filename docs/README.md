@@ -7,6 +7,7 @@ They cover:
 - what the package is for
 - what the architecture does
 - what the evidence supports
+- how the current controlled evidence consolidates across recall and injection
 - what the evidence does not support
 - how to run and extend the testbed
 - what the deployable observation contract allows and forbids

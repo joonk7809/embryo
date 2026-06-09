@@ -27,6 +27,7 @@ NOT_EVALUABLE_INSUFFICIENT_ANCHOR_COVERAGE = "NOT_EVALUABLE_insufficient_anchor_
 GO_WATER_RECALL_EVALUABLE = "GO_water_recall_evaluable"
 GO_BENCH_RECALL_EVALUABLE = "GO_bench_recall_evaluable"
 GO_PASSIVE_MATCH_EVALUABLE = "GO_passive_match_evaluable"
+GO_POPGYM_REPEAT_FIRST_EVALUABLE = "GO_popgym_repeat_first_evaluable"
 INCONCLUSIVE_LOW_ERE = "INCONCLUSIVE_LOW_ERE"
 
 FORWARD_CLEAN_ARM = "query_memory_clean"
@@ -59,6 +60,13 @@ PASSIVE_MATCH_CONTROL_ARMS = (
     "passive_match_shuffled",
     "passive_match_stale",
     "passive_match_wrong_binding",
+)
+POPGYM_REPEAT_FIRST_CLEAN_ARM = "popgym_repeat_first_clean"
+POPGYM_REPEAT_FIRST_CONTROL_ARMS = (
+    "popgym_repeat_first_off",
+    "popgym_repeat_first_shuffled",
+    "popgym_repeat_first_stale",
+    "popgym_repeat_first_wrong_binding",
 )
 
 
@@ -180,6 +188,7 @@ def summarize_long_run_protocol(
         "memory_grounded_score": memory,
         "anchor_coverage": coverage,
         "passive_match": passive_match_protocol_summary(ticks, protocol_manifest=protocol_manifest),
+        "popgym_repeat_first": popgym_repeat_first_protocol_summary(ticks, protocol_manifest=protocol_manifest),
         "water_recall": water_recall_protocol_summary(ticks, protocol_manifest=protocol_manifest),
         "bench_recall": bench_recall_protocol_summary(ticks, protocol_manifest=protocol_manifest),
         "deterministic_replay": determinism,
@@ -406,6 +415,165 @@ def passive_match_per_seed(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
             ),
             "cue_visible_count": sum(int(bool(row["metrics"].get("passive_match_cue_visible", False))) for row in items),
             "choice_visible_count": sum(int(bool(row["metrics"].get("passive_match_choice_visible", False))) for row in items),
+        }
+        for seed, items in sorted(grouped.items())
+    }
+
+
+def popgym_repeat_first_protocol_summary(
+    ticks: Sequence[Mapping[str, Any]],
+    *,
+    protocol_manifest: Mapping[str, Any],
+) -> dict[str, Any]:
+    if not popgym_repeat_first_present(protocol_manifest, ticks):
+        return {"enabled": False, "status": "disabled"}
+    rows = [
+        row
+        for row in ticks
+        if isinstance(row.get("actor", {}), Mapping)
+        and isinstance(row.get("metrics", {}), Mapping)
+        and str(row["actor"].get("arm", "")) in {POPGYM_REPEAT_FIRST_CLEAN_ARM, *POPGYM_REPEAT_FIRST_CONTROL_ARMS}
+    ]
+    by_key = {
+        (
+            str(row["actor"].get("arm", "")),
+            int(row["actor"].get("seed", 0)),
+            str(row["actor"].get("episode_id", row["actor"].get("episode_index", "0"))),
+            int(row["actor"].get("tick", 0)),
+        ): row
+        for row in rows
+    }
+    clean_ere_rows = [
+        row
+        for row in rows
+        if str(row["actor"].get("arm", "")) == POPGYM_REPEAT_FIRST_CLEAN_ARM
+        and bool(row["metrics"].get("popgym_repeat_first_ere", False))
+    ]
+    episode_keys = {
+        (
+            int(row["actor"].get("seed", 0)),
+            str(row["actor"].get("episode_id", row["actor"].get("episode_index", "0"))),
+        )
+        for row in rows
+        if str(row["actor"].get("arm", "")) == POPGYM_REPEAT_FIRST_CLEAN_ARM
+    }
+    ere_episode_keys = {
+        (
+            int(row["actor"].get("seed", 0)),
+            str(row["actor"].get("episode_id", row["actor"].get("episode_index", "0"))),
+        )
+        for row in clean_ere_rows
+    }
+    requirements = popgym_repeat_first_requirements(protocol_manifest)
+    ere_episode_rate = round(len(ere_episode_keys) / len(episode_keys), 4) if episode_keys else 0.0
+    status = GO_POPGYM_REPEAT_FIRST_EVALUABLE
+    if len(clean_ere_rows) < int(requirements["min_ere_count"]) or ere_episode_rate < float(requirements["min_ere_episode_rate"]):
+        status = INCONCLUSIVE_LOW_ERE
+    return {
+        "enabled": True,
+        "status": status,
+        "requirements": requirements,
+        "clean_ere_count": len(clean_ere_rows),
+        "clean_ere_episode_count": len(ere_episode_keys),
+        "clean_episode_count": len(episode_keys),
+        "clean_ere_episode_rate": ere_episode_rate,
+        "summary_by_arm": popgym_repeat_first_summary_by_arm(rows),
+        "contrasts": popgym_repeat_first_contrasts(clean_ere_rows, by_key),
+        "per_seed": popgym_repeat_first_per_seed(rows),
+    }
+
+
+def popgym_repeat_first_present(protocol_manifest: Mapping[str, Any], ticks: Sequence[Mapping[str, Any]]) -> bool:
+    arms = set(str(arm) for arm in protocol_manifest.get("arms", ()))
+    if POPGYM_REPEAT_FIRST_CLEAN_ARM in arms or any(arm in arms for arm in POPGYM_REPEAT_FIRST_CONTROL_ARMS):
+        return True
+    return any(bool(nested(row, "metrics", "popgym_repeat_first_ere", False)) for row in ticks)
+
+
+def popgym_repeat_first_requirements(protocol_manifest: Mapping[str, Any]) -> dict[str, Any]:
+    protocol = protocol_manifest.get("protocol", {})
+    repeat = protocol.get("popgym_repeat_first", {}) if isinstance(protocol, Mapping) else {}
+    repeat = repeat if isinstance(repeat, Mapping) else {}
+    return {
+        "min_ere_count": int(repeat.get("min_ere_count", 30)),
+        "min_ere_episode_rate": float(repeat.get("min_ere_episode_rate", 0.5)),
+        "recall_window": int(repeat.get("recall_window", 1)),
+    }
+
+
+def popgym_repeat_first_summary_by_arm(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    grouped: dict[str, list[Mapping[str, Any]]] = defaultdict(list)
+    for row in rows:
+        grouped[str(row["actor"].get("arm", "unknown"))].append(row)
+    return {arm: popgym_repeat_first_arm_summary(items) for arm, items in sorted(grouped.items())}
+
+
+def popgym_repeat_first_arm_summary(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    ere_rows = [row for row in rows if bool(row["metrics"].get("popgym_repeat_first_ere", False))]
+    actions = [str(row["actor"].get("action", "")) for row in ere_rows]
+    return {
+        "tick_count": len(rows),
+        "ere_count": len(ere_rows),
+        "recall_active_rate": round(bool_rate(row["metrics"].get("popgym_repeat_first_recall_active", False) for row in ere_rows), 4),
+        "recall_consistent_action_rate": round(
+            bool_rate(row["metrics"].get("popgym_repeat_first_recall_consistent_action", False) for row in ere_rows),
+            4,
+        ),
+        "success_rate_eval_only": round(bool_rate(row["eval_only"].get("popgym_success_eval_only", False) for row in ere_rows), 4),
+        "mean_reward_eval_only": round(mean(row["eval_only"].get("reward_delta_eval_only", 0.0) for row in ere_rows), 4),
+        "mean_fact_age_on_ere": round(mean(row["metrics"].get("popgym_repeat_first_fact_age") for row in ere_rows), 4),
+        "current_match_rate_on_ere": round(bool_rate(row["metrics"].get("popgym_repeat_first_current_matches_target", False) for row in ere_rows), 4),
+        "action_distribution_on_ere": dict(sorted(Counter(actions).items())),
+    }
+
+
+def popgym_repeat_first_contrasts(
+    clean_ere_rows: Sequence[Mapping[str, Any]],
+    by_key: Mapping[tuple[str, int, str, int], Mapping[str, Any]],
+) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    clean_consistency = bool_rate(nested(row, "metrics", "popgym_repeat_first_recall_consistent_action", False) for row in clean_ere_rows)
+    clean_success = bool_rate(nested(row, "eval_only", "popgym_success_eval_only", False) for row in clean_ere_rows)
+    for arm in POPGYM_REPEAT_FIRST_CONTROL_ARMS:
+        comparable: list[Mapping[str, Any]] = []
+        for row in clean_ere_rows:
+            actor = row["actor"]
+            key = (
+                arm,
+                int(actor.get("seed", 0)),
+                str(actor.get("episode_id", actor.get("episode_index", "0"))),
+                int(actor.get("tick", 0)),
+            )
+            if key in by_key:
+                comparable.append(by_key[key])
+        control_consistency = bool_rate(nested(row, "metrics", "popgym_repeat_first_recall_consistent_action", False) for row in comparable)
+        control_success = bool_rate(nested(row, "eval_only", "popgym_success_eval_only", False) for row in comparable)
+        result[arm] = {
+            "comparable_ere_count": len(comparable),
+            "clean_recall_consistent_action_rate": round(clean_consistency, 4),
+            "control_recall_consistent_action_rate": round(control_consistency, 4),
+            "clean_minus_control_recall_consistent_action_rate": round(clean_consistency - control_consistency, 4),
+            "clean_success_rate_eval_only": round(clean_success, 4),
+            "control_success_rate_eval_only": round(control_success, 4),
+            "clean_minus_control_success_rate_eval_only": round(clean_success - control_success, 4),
+        }
+    return result
+
+
+def popgym_repeat_first_per_seed(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    grouped: dict[int, list[Mapping[str, Any]]] = defaultdict(list)
+    for row in rows:
+        grouped[int(row["actor"].get("seed", 0))].append(row)
+    return {
+        str(seed): {
+            "clean_ere_count": sum(
+                int(
+                    str(row["actor"].get("arm", "")) == POPGYM_REPEAT_FIRST_CLEAN_ARM
+                    and bool(row["metrics"].get("popgym_repeat_first_ere", False))
+                )
+                for row in items
+            ),
+            "query_tick_count": sum(int(row["eval_only"].get("popgym_query_tick_eval_only") is not None) for row in items),
         }
         for seed, items in sorted(grouped.items())
     }
@@ -1085,6 +1253,45 @@ def format_long_run_summary_markdown(summary: Mapping[str, Any]) -> str:
                     + " |"
                 )
             lines.append("")
+    repeat = summary.get("popgym_repeat_first", {})
+    repeat = repeat if isinstance(repeat, Mapping) else {}
+    if bool(repeat.get("enabled", False)):
+        lines.extend(
+            [
+                "## POPGym RepeatFirst",
+                "",
+                f"- Status: `{repeat.get('status')}`",
+                f"- Clean ERE count: `{repeat.get('clean_ere_count')}`",
+                f"- Clean ERE episode rate: `{repeat.get('clean_ere_episode_rate')}`",
+                f"- Requirements: `{repeat.get('requirements')}`",
+                "",
+            ]
+        )
+        contrasts = repeat.get("contrasts", {})
+        if isinstance(contrasts, Mapping):
+            lines.extend(
+                [
+                    "| Control | Comparable EREs | Clean success | Control success | Delta |",
+                    "| --- | ---: | ---: | ---: | ---: |",
+                ]
+            )
+            for arm, row in contrasts.items():
+                if not isinstance(row, Mapping):
+                    continue
+                lines.append(
+                    "| "
+                    + " | ".join(
+                        [
+                            str(arm),
+                            str(row.get("comparable_ere_count")),
+                            str(row.get("clean_success_rate_eval_only")),
+                            str(row.get("control_success_rate_eval_only")),
+                            str(row.get("clean_minus_control_success_rate_eval_only")),
+                        ]
+                    )
+                    + " |"
+                )
+            lines.append("")
     bench = summary.get("bench_recall", {})
     bench = bench if isinstance(bench, Mapping) else {}
     if bool(bench.get("enabled", False)):
@@ -1138,6 +1345,7 @@ def public_protocol_summary(protocol_manifest: Mapping[str, Any]) -> dict[str, A
     actor = actor if isinstance(actor, Mapping) else {}
     return {
         "runtime": runtime.get("name"),
+        "runtime_task": runtime.get("task"),
         "actor": actor.get("name"),
         "actor_checkpoint": actor.get("checkpoint"),
         "actor_repo_path": actor.get("repo_path"),
@@ -1155,6 +1363,7 @@ def public_protocol_summary(protocol_manifest: Mapping[str, Any]) -> dict[str, A
         "water_recall": protocol.get("water_recall"),
         "bench_recall": protocol.get("bench_recall"),
         "passive_match": protocol.get("passive_match"),
+        "popgym_repeat_first": protocol.get("popgym_repeat_first"),
         "deterministic_backend_patch": runtime.get("deterministic_backend_patch"),
         "backend_determinism_patch": runtime.get("backend_determinism_patch"),
         "fact_surface": fact_surface.get("name"),

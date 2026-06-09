@@ -80,6 +80,23 @@ def build_tick_row(
             "passive_match_effective_target_action": decision.get("passive_match_effective_target_action"),
             "passive_match_recall_consistent_action": bool(decision.get("passive_match_recall_consistent_action", False)),
             "passive_match_query_content_hash": decision.get("passive_match_query_content_hash"),
+            "popgym_repeat_first_current_suit": decision.get("popgym_repeat_first_current_suit"),
+            "popgym_repeat_first_fact_present": bool(decision.get("popgym_repeat_first_fact_present", False)),
+            "popgym_repeat_first_fact_age": int(decision.get("popgym_repeat_first_fact_age", 0)),
+            "popgym_repeat_first_fact_suit": decision.get("popgym_repeat_first_fact_suit"),
+            "popgym_repeat_first_fact_content_hash": decision.get("popgym_repeat_first_fact_content_hash"),
+            "popgym_repeat_first_h_lstm": int(decision.get("popgym_repeat_first_h_lstm", 0)),
+            "popgym_repeat_first_ttl": int(decision.get("popgym_repeat_first_ttl", 0)),
+            "popgym_repeat_first_current_matches_target": bool(decision.get("popgym_repeat_first_current_matches_target", False)),
+            "popgym_repeat_first_visible_query_shortcut": bool(decision.get("popgym_repeat_first_visible_query_shortcut", False)),
+            "popgym_repeat_first_ere": bool(decision.get("popgym_repeat_first_ere", False)),
+            "popgym_repeat_first_recall_active": bool(decision.get("popgym_repeat_first_recall_active", False)),
+            "popgym_repeat_first_recall_reason": decision.get("popgym_repeat_first_recall_reason"),
+            "popgym_repeat_first_target_action": decision.get("popgym_repeat_first_target_action"),
+            "popgym_repeat_first_effective_suit": decision.get("popgym_repeat_first_effective_suit"),
+            "popgym_repeat_first_effective_target_action": decision.get("popgym_repeat_first_effective_target_action"),
+            "popgym_repeat_first_recall_consistent_action": bool(decision.get("popgym_repeat_first_recall_consistent_action", False)),
+            "popgym_repeat_first_query_content_hash": decision.get("popgym_repeat_first_query_content_hash"),
             "water_visible": bool(decision.get("water_visible", False)),
             "water_bearing": decision.get("water_bearing"),
             "water_fact_present": bool(decision.get("water_fact_present", False)),
@@ -143,6 +160,9 @@ def actor_context_from_decision(observation: Mapping[str, Any], decision: Mappin
         "passive_match_cue_seen_v1": bool(decision.get("passive_match_cue_visible", False)),
         "passive_match_query_hash": str(decision.get("passive_match_query_content_hash", "")),
         "passive_match_cache_age": int(decision.get("passive_match_fact_age", 0)),
+        "popgym_repeat_first_target_seen_v1": bool(decision.get("popgym_repeat_first_fact_present", False)),
+        "popgym_repeat_first_query_hash": str(decision.get("popgym_repeat_first_query_content_hash", "")),
+        "popgym_repeat_first_cache_age": int(decision.get("popgym_repeat_first_fact_age", 0)),
     }
 
 
@@ -163,6 +183,9 @@ def eval_only_tick_fields(step: Any) -> dict[str, Any]:
         "passive_match_cue_side_eval_only": str(info.get("passive_match_cue_side", "")) if "passive_match_cue_side" in info else None,
         "passive_match_correct_action_eval_only": str(info.get("passive_match_correct_action", "")) if "passive_match_correct_action" in info else None,
         "passive_match_success_eval_only": bool(info.get("passive_match_success")) if "passive_match_success" in info else None,
+        "popgym_task_eval_only": str(info.get("popgym_task", "")) if "popgym_task" in info else None,
+        "popgym_query_tick_eval_only": bool(info.get("popgym_query_tick")) if "popgym_query_tick" in info else None,
+        "popgym_success_eval_only": bool(info.get("popgym_success")) if "popgym_success" in info else None,
     }
 
 

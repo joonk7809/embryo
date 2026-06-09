@@ -56,6 +56,7 @@ def resolve_protocol_manifest(config: Mapping[str, Any]) -> dict[str, Any]:
             "event_self_trigger": bool(metrics.get("event_self_trigger", True)),
             "memory_grounded_score": bool(metrics.get("memory_grounded_score", True)),
             "passive_match": bool(metrics.get("passive_match", False)),
+            "popgym_repeat_first": bool(metrics.get("popgym_repeat_first", False)),
             "water_recall": bool(metrics.get("water_recall", False)),
             "bench_recall": bool(metrics.get("bench_recall", False)),
             "contamination": bool(metrics.get("contamination", True)),

@@ -1,0 +1,26 @@
+run:
+  tasks:
+    - concentration_easy
+    - concentration_medium
+    - concentration_hard
+
+model:
+  obs_embedding_dim: 8
+  prev_action_embedding_dim: 8
+  hidden_size: 64
+
+training:
+  seed: 20260608
+  seed_start: 10000
+  seed_count: 128
+  epochs: 20
+  batch_size: 32
+  learning_rate: 0.003
+
+evaluation:
+  seed_start: 12000
+  seed_count: 32
+  short_completion_min: 0.80
+  long_completion_max: 0.50
+  completion_drop_min: 0.25
+  random_margin_min: 0.20

@@ -116,10 +116,41 @@ def move(position: tuple[int, int], action: str, *, width: int, height: int) -> 
 
 def deployable_reveal_observation(episode: KitchenEpisode) -> dict[str, Any]:
     drawer_id = episode.target_drawer_id
+    return deployable_object_location_observation(
+        object_id=episode.target_object,
+        drawer_id=drawer_id,
+        position=episode.drawer_position(drawer_id),
+        phase="actual",
+    )
+
+
+def deployable_reveal_observations(episode: KitchenEpisode) -> list[dict[str, Any]]:
+    rows = [
+        deployable_object_location_observation(
+            object_id=episode.target_object,
+            drawer_id=episode.stale_drawer_id,
+            position=episode.drawer_position(episode.stale_drawer_id),
+            phase="stale_prior",
+        )
+    ]
+    for object_id, drawer_id in sorted(episode.object_drawers.items()):
+        rows.append(
+            deployable_object_location_observation(
+                object_id=object_id,
+                drawer_id=drawer_id,
+                position=episode.drawer_position(drawer_id),
+                phase="actual",
+            )
+        )
+    return rows
+
+
+def deployable_object_location_observation(*, object_id: str, drawer_id: int, position: tuple[int, int], phase: str) -> dict[str, Any]:
     return {
-        "gridworld_visible_object": episode.target_object,
-        "gridworld_visible_drawer_id": drawer_id,
-        "gridworld_visible_drawer_position": list(episode.drawer_position(drawer_id)),
+        "gridworld_visible_object": str(object_id),
+        "gridworld_visible_drawer_id": int(drawer_id),
+        "gridworld_visible_drawer_position": list(position),
+        "gridworld_reveal_phase": str(phase),
     }
 
 

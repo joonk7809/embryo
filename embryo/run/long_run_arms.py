@@ -26,6 +26,11 @@ from embryo.memory.typed_recall import (
 from embryo.models.actors import ActorDecision
 from embryo.models.memory_residual_policy import MemoryResidualInput, MemoryResidualPolicy
 from embryo.models import RuleRouterModel, ThresholdFactWriter
+from embryo.run.popgym_repeat_first_arms import (
+    POPGYM_REPEAT_FIRST_ARMS,
+    make_repeat_first_memory,
+    select_action_with_popgym_repeat_first,
+)
 from embryo.runtimes.base import RuntimeSpec
 
 
@@ -114,6 +119,7 @@ class EpisodeState:
         water_recall_config: Mapping[str, Any] | None = None,
         bench_recall_config: Mapping[str, Any] | None = None,
         passive_match_config: Mapping[str, Any] | None = None,
+        popgym_repeat_first_config: Mapping[str, Any] | None = None,
     ) -> None:
         self.arm = arm
         self.rng = random.Random(f"{seed}:{arm}:{horizon}")
@@ -140,6 +146,10 @@ class EpisodeState:
         self.passive_match_ttl = int(passive_cfg.get("ttl", 1024))
         self.passive_match_h_lstm = int(passive_cfg.get("h_lstm", 8))
         self.passive_match_memory = PassiveCueMemory(ttl=self.passive_match_ttl)
+        repeat_cfg = popgym_repeat_first_config if isinstance(popgym_repeat_first_config, Mapping) else {}
+        self.popgym_repeat_first_ttl = int(repeat_cfg.get("ttl", 1024))
+        self.popgym_repeat_first_h_lstm = int(repeat_cfg.get("h_lstm", 4))
+        self.popgym_repeat_first_memory = make_repeat_first_memory(ttl=self.popgym_repeat_first_ttl)
 
     def observe(self, action: str, route: str) -> None:
         if action == self.previous_action:
@@ -172,6 +182,8 @@ class EpisodeState:
 
 
 def select_action_for_arm(spec: RuntimeSpec, observation: Mapping[str, Any], state: EpisodeState, arm: str) -> dict[str, Any]:
+    if arm in POPGYM_REPEAT_FIRST_ARMS:
+        return select_action_with_popgym_repeat_first(spec, observation, state, arm, None, None, MEMORY_RESIDUAL_BIAS)
     if arm in PASSIVE_MATCH_ARMS:
         return select_action_with_passive_match(spec, observation, state, arm, None, None)
     if arm in WATER_RECALL_ARMS:
@@ -271,6 +283,9 @@ def select_action_with_actor_sidecar(
 
     if arm in PASSIVE_MATCH_ARMS:
         return select_action_with_passive_match(spec, observation, state, arm, base_decision, residual_policy, memory_residual_bias)
+
+    if arm in POPGYM_REPEAT_FIRST_ARMS:
+        return select_action_with_popgym_repeat_first(spec, observation, state, arm, base_decision, residual_policy, memory_residual_bias)
 
     if arm == "no_memory":
         return actor_passthrough_decision(spec, observation, state, arm, base_decision)

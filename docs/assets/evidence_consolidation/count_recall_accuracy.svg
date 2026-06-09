@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="430" viewBox="0 0 760 430" role="img" aria-label="CountRecall query accuracy">
+<style>
+text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; fill: #111827; }
+.title { font-size: 20px; font-weight: 700; }
+.axis { font-size: 13px; font-weight: 600; fill: #374151; }
+.tick { font-size: 11px; fill: #4b5563; }
+.legend { font-size: 12px; fill: #111827; }
+.value { font-size: 11px; fill: #111827; }
+</style>
+<rect width="760" height="430" fill="#ffffff"/>
+<text x="28" y="32" class="title">CountRecall query accuracy</text>
+<line x1="78" y1="318" x2="730" y2="318" stroke="#111827"/>
+<line x1="78" y1="54" x2="78" y2="318" stroke="#111827"/>
+<text x="404.00" y="376" text-anchor="middle" class="axis"></text>
+<text x="22" y="186.00" transform="rotate(-90 22 186.00)" text-anchor="middle" class="axis">Accuracy</text>
+<line x1="78" y1="318.00" x2="730" y2="318.00" stroke="#e5e7eb"/>
+<text x="68" y="322.00" text-anchor="end" class="tick">0</text>
+<line x1="78" y1="252.00" x2="730" y2="252.00" stroke="#e5e7eb"/>
+<text x="68" y="256.00" text-anchor="end" class="tick">0.25</text>
+<line x1="78" y1="186.00" x2="730" y2="186.00" stroke="#e5e7eb"/>
+<text x="68" y="190.00" text-anchor="end" class="tick">0.5</text>
+<line x1="78" y1="120.00" x2="730" y2="120.00" stroke="#e5e7eb"/>
+<text x="68" y="124.00" text-anchor="end" class="tick">0.75</text>
+<line x1="78" y1="54.00" x2="730" y2="54.00" stroke="#e5e7eb"/>
+<text x="68" y="58.00" text-anchor="end" class="tick">1</text>
+<rect x="94.00" y="303.81" width="90.00" height="14.19" fill="#6b7280"/>
+<text x="139.00" y="295.81" text-anchor="middle" class="value">0.054</text>
+<text x="139.00" y="346" text-anchor="middle" class="tick">no memory</text>
+<rect x="200.00" y="54.00" width="90.00" height="264.00" fill="#16a34a"/>
+<text x="245.00" y="46.00" text-anchor="middle" class="value">1.000</text>
+<text x="245.00" y="346" text-anchor="middle" class="tick">clean</text>
+<rect x="306.00" y="263.54" width="90.00" height="54.46" fill="#f59e0b"/>
+<text x="351.00" y="255.54" text-anchor="middle" class="value">0.206</text>
+<text x="351.00" y="346" text-anchor="middle" class="tick">shuffled</text>
+<rect x="412.00" y="262.22" width="90.00" height="55.78" fill="#dc2626"/>
+<text x="457.00" y="254.22" text-anchor="middle" class="value">0.211</text>
+<text x="457.00" y="346" text-anchor="middle" class="tick">wrong binding</text>
+<rect x="518.00" y="290.58" width="90.00" height="27.42" fill="#7c3aed"/>
+<text x="563.00" y="282.58" text-anchor="middle" class="value">0.104</text>
+<text x="563.00" y="346" text-anchor="middle" class="tick">stale</text>
+<rect x="624.00" y="54.00" width="90.00" height="264.00" fill="#2563eb"/>
+<text x="669.00" y="46.00" text-anchor="middle" class="value">1.000</text>
+<text x="669.00" y="346" text-anchor="middle" class="tick">oracle</text>
+</svg>

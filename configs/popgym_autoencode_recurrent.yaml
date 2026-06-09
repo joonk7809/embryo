@@ -1,0 +1,59 @@
+tasks:
+  train:
+    - autoencode_easy
+  eval:
+    - autoencode_easy
+    - autoencode_medium
+    - autoencode_hard
+
+splits:
+  autoencode_easy:
+    seed_start: 12000
+    seed_count: 128
+  autoencode_medium:
+    seed_start: 13000
+    seed_count: 128
+  autoencode_hard:
+    seed_start: 14000
+    seed_count: 128
+
+model:
+  embedding_dim: 16
+  hidden_size: 32
+
+training:
+  seed: 20260608
+  seed_start: 10000
+  seed_count: 512
+  epochs: 30
+  batch_size: 64
+  learning_rate: 0.01
+
+evaluation:
+  min_easy_success_rate: 0.90
+  chance_success_rate: 0.25
+  falloff_tolerance: 0.05
+  falloff_tail_bins: 8
+
+memory_eval:
+  task: autoencode_easy
+  seed_start: 12000
+  seed_count: 128
+  gaps: [1, 2, 3, 4, 10, 20, 27, 40, 52]
+
+learned_memory:
+  enabled: true
+  task: autoencode_easy
+  seed_start: 10000
+  seed_count: 512
+  eval_seed_start: 12000
+  eval_seed_count: 128
+  gaps: [1, 2, 3, 4, 10, 20, 27, 40, 52]
+  value_dim: 8
+  write_eta: 1.0
+  epochs: 30
+  batch_size: 64
+  learning_rate: 0.05
+  min_clean_success_rate: 0.95
+  max_content_corrupt_success_rate: 0.05
+  max_chance_control_success_rate: 0.35

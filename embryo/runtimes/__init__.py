@@ -8,6 +8,7 @@ from embryo.runtimes.registry import make_runtime, register_runtime, runtime_nam
 from embryo.runtimes import fixture as _fixture  # noqa: F401
 from embryo.runtimes import passive_visual_match as _passive_visual_match  # noqa: F401
 from embryo.runtimes.crafter import adapter as _crafter_adapter  # noqa: F401
+from embryo.runtimes.popgym import adapter as _popgym_adapter  # noqa: F401
 
 __all__ = [
     "RuntimeAdapter",

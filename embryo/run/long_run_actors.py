@@ -12,6 +12,7 @@ from embryo.runtimes.base import RuntimeSpec
 
 INLINE_DIAGNOSTIC_ACTOR = "inline_diagnostic"
 DELTA_IRIS_ACTOR = "delta_iris"
+POPGYM_RECURRENT_ACTOR = "popgym_recurrent"
 DEFAULT_MEMORY_RESIDUAL_BIAS = 8.0
 
 
@@ -62,6 +63,16 @@ def make_long_run_actor(config: Mapping[str, Any], spec: RuntimeSpec, *, root: s
     actor = normalize_actor_config(config)
     if actor.name == INLINE_DIAGNOSTIC_ACTOR:
         return None
+    if actor.name == POPGYM_RECURRENT_ACTOR:
+        from embryo.models.popgym_recurrent import RepeatFirstRecurrentActor
+
+        root_path = Path(root) if root is not None else Path.cwd()
+        return RepeatFirstRecurrentActor(
+            checkpoint_path=resolve_path(root_path, actor.checkpoint),
+            action_names=spec.action_names,
+            device=actor.device,
+        )
+
     if actor.name != DELTA_IRIS_ACTOR:
         raise ValueError(f"Unknown long-run actor: {actor.name}")
 

@@ -1,0 +1,33 @@
+runtime:
+  name: popgym_repeat_first
+  task: repeat_first_easy
+  split: dev
+  seed_start: 11000
+  seed_count: 64
+
+protocol:
+  horizons: [64]
+  max_episodes_per_seed: 1
+  detail_ticks: true
+  popgym_repeat_first:
+    ttl: 128
+    h_lstm: 4
+    min_ere_count: 30
+    min_ere_episode_rate: 0.9
+    recall_window: 1
+
+arms:
+  - popgym_repeat_first_off
+  - popgym_repeat_first_clean
+  - popgym_repeat_first_shuffled
+  - popgym_repeat_first_stale
+  - popgym_repeat_first_wrong_binding
+
+metrics:
+  survival: true
+  valid_actions: true
+  loop_rate: true
+  event_self_trigger: true
+  memory_grounded_score: false
+  popgym_repeat_first: true
+  contamination: true

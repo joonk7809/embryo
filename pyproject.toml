@@ -26,6 +26,8 @@ dependencies = [
 
 [project.optional-dependencies]
 crafter = ["crafter>=1.8.3"]
+popgym = ["popgym>=1.0.6"]
+popgym-recurrent = ["popgym>=1.0.6", "torch>=2.0"]
 torch = ["torch>=2.0"]
 train = [
   "crafter>=1.8.3",

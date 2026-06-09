@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="780" height="460" viewBox="0 0 780 460" role="img" aria-label="Gridworld retrieval cost by drawer count">
+<style>
+text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; fill: #111827; }
+.title { font-size: 20px; font-weight: 700; }
+.axis { font-size: 13px; font-weight: 600; fill: #374151; }
+.tick { font-size: 11px; fill: #4b5563; }
+.legend { font-size: 12px; fill: #111827; }
+.value { font-size: 11px; fill: #111827; }
+</style>
+<rect width="780" height="460" fill="#ffffff"/>
+<text x="28" y="32" class="title">Gridworld retrieval cost by drawer count</text>
+<line x1="76" y1="382" x2="560" y2="382" stroke="#111827"/>
+<line x1="76" y1="54" x2="76" y2="382" stroke="#111827"/>
+<text x="318.00" y="440" text-anchor="middle" class="axis">Drawer count</text>
+<text x="22" y="218.00" transform="rotate(-90 22 218.00)" text-anchor="middle" class="axis">Drawers opened before success</text>
+<line x1="76" y1="382.00" x2="560" y2="382.00" stroke="#e5e7eb"/>
+<text x="66" y="386.00" text-anchor="end" class="tick">0</text>
+<line x1="76" y1="288.29" x2="560" y2="288.29" stroke="#e5e7eb"/>
+<text x="66" y="292.29" text-anchor="end" class="tick">4</text>
+<line x1="76" y1="194.57" x2="560" y2="194.57" stroke="#e5e7eb"/>
+<text x="66" y="198.57" text-anchor="end" class="tick">8</text>
+<line x1="76" y1="100.86" x2="560" y2="100.86" stroke="#e5e7eb"/>
+<text x="66" y="104.86" text-anchor="end" class="tick">12</text>
+<line x1="76" y1="7.14" x2="560" y2="7.14" stroke="#e5e7eb"/>
+<text x="66" y="11.14" text-anchor="end" class="tick">16</text>
+<text x="76.00" y="406" text-anchor="middle" class="tick">6</text>
+<text x="197.00" y="406" text-anchor="middle" class="tick">10</text>
+<text x="318.00" y="406" text-anchor="middle" class="tick">14</text>
+<text x="439.00" y="406" text-anchor="middle" class="tick">18</text>
+<text x="560.00" y="406" text-anchor="middle" class="tick">22</text>
+<polyline points="76.00,358.57 197.00,358.57 318.00,358.57 439.00,358.57 560.00,358.57" fill="none" stroke="#16a34a" stroke-width="3"/>
+<circle cx="76.00" cy="358.57" r="4" fill="#16a34a"/>
+<circle cx="197.00" cy="358.57" r="4" fill="#16a34a"/>
+<circle cx="318.00" cy="358.57" r="4" fill="#16a34a"/>
+<circle cx="439.00" cy="358.57" r="4" fill="#16a34a"/>
+<circle cx="560.00" cy="358.57" r="4" fill="#16a34a"/>
+<line x1="592" y1="66" x2="614" y2="66" stroke="#16a34a" stroke-width="3"/>
+<text x="622" y="70" class="legend">clean</text>
+<polyline points="76.00,301.46 197.00,260.10 318.00,211.41 439.00,151.01 560.00,90.61" fill="none" stroke="#6b7280" stroke-width="3"/>
+<circle cx="76.00" cy="301.46" r="4" fill="#6b7280"/>
+<circle cx="197.00" cy="260.10" r="4" fill="#6b7280"/>
+<circle cx="318.00" cy="211.41" r="4" fill="#6b7280"/>
+<circle cx="439.00" cy="151.01" r="4" fill="#6b7280"/>
+<circle cx="560.00" cy="90.61" r="4" fill="#6b7280"/>
+<line x1="592" y1="90" x2="614" y2="90" stroke="#6b7280" stroke-width="3"/>
+<text x="622" y="94" class="legend">systematic search</text>
+<polyline points="76.00,290.12 197.00,248.02 318.00,200.79 439.00,139.29 560.00,77.43" fill="none" stroke="#dc2626" stroke-width="3"/>
+<circle cx="76.00" cy="290.12" r="4" fill="#dc2626"/>
+<circle cx="197.00" cy="248.02" r="4" fill="#dc2626"/>
+<circle cx="318.00" cy="200.79" r="4" fill="#dc2626"/>
+<circle cx="439.00" cy="139.29" r="4" fill="#dc2626"/>
+<circle cx="560.00" cy="77.43" r="4" fill="#dc2626"/>
+<line x1="592" y1="114" x2="614" y2="114" stroke="#dc2626" stroke-width="3"/>
+<text x="622" y="118" class="legend">wrong binding</text>
+</svg>

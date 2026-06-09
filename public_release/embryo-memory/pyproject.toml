@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "embryo-memory"
+version = "0.1.0"
+description = "Controlled evidence probes for explicit decoupled memory in sequential agents."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "Apache-2.0" }
+authors = [
+  { name = "Embryo Memory contributors" },
+]
+dependencies = [
+  "numpy==2.0.2",
+  "pyyaml==6.0.3",
+]
+
+[project.optional-dependencies]
+popgym = [
+  "gym==0.26.2",
+  "popgym==1.0.6",
+]
+torch = [
+  "torch==2.8.0",
+]
+pdf = [
+  "reportlab==4.4.1",
+]
+all = [
+  "gym==0.26.2",
+  "popgym==1.0.6",
+  "torch==2.8.0",
+  "reportlab==4.4.1",
+]
+
+[tool.setuptools.packages.find]
+include = ["embryo*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

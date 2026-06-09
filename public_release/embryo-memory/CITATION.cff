@@ -1,0 +1,9 @@
+cff-version: 1.2.0
+message: "If you use this reproduction subset, cite it as controlled evidence for explicit decoupled memory probes."
+title: "Embryo Memory: Controlled Evidence Probes for Explicit Decoupled Memory"
+authors:
+  - family-names: "Embryo Memory contributors"
+version: "0.1.0"
+license: "Apache-2.0"
+repository-code: "https://github.com/joonk7809/embryo-memory"
+date-released: "2026-06-09"

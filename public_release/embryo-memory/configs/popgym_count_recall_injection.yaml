@@ -1,0 +1,13 @@
+runtime:
+  name: popgym_count_recall
+  task: count_recall_hard
+  seed_start: 12000
+  seed_count: 64
+
+protocol:
+  stale_lag: 32
+  min_oracle_accuracy: 0.99
+  min_clean_accuracy: 0.99
+  max_no_memory_accuracy: 0.15
+  max_corrupt_accuracy: 0.35
+  max_invalid_action_rate: 0.0

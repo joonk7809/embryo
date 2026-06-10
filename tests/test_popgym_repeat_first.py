@@ -2,8 +2,6 @@ import sys
 import types
 import unittest
 
-from gymnasium import spaces
-
 from embryo.eval.long_run import GO_POPGYM_REPEAT_FIRST_EVALUABLE, popgym_repeat_first_protocol_summary
 from embryo.memory.popgym_repeat_first import RepeatFirstMemory, repeat_first_target_fact_from_observation
 from embryo.run.long_run_arms import EpisodeState, select_action_for_arm
@@ -51,8 +49,11 @@ class PopGymRepeatFirstTests(unittest.TestCase):
         self.assertFalse(wrong["popgym_repeat_first_recall_consistent_action"])
 
     def test_adapter_uses_optional_popgym_env_shape(self):
+        class FakeDiscreteActionSpace:
+            n = 4
+
         class FakeRepeatFirstEasy:
-            action_space = spaces.Discrete(4)
+            action_space = FakeDiscreteActionSpace()
 
             def __init__(self):
                 self.target = 2

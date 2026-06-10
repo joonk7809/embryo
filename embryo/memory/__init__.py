@@ -48,6 +48,7 @@ from embryo.memory.gridworld_kitchen import (
     GridworldObjectLocationMemory,
     gridworld_location_from_observation,
 )
+from embryo.memory.distractor_stream import BudgetedFactMemory, StreamEpisode, StreamFact
 
 __all__ = [
     "LOCALIZED_RESOURCE_SEEN",
@@ -90,4 +91,7 @@ __all__ = [
     "GridworldLocationEntry",
     "GridworldObjectLocationMemory",
     "gridworld_location_from_observation",
+    "BudgetedFactMemory",
+    "StreamEpisode",
+    "StreamFact",
 ]

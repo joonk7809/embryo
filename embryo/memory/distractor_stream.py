@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import random
 from dataclasses import dataclass
 from typing import Any
@@ -16,6 +17,7 @@ class StreamFact:
     key: int
     value: int
     cue: float
+    features: tuple[int, ...]
     stream_index: int
     relevant_eval_only: bool
 
@@ -25,6 +27,7 @@ class StreamFact:
                 "key": int(self.key),
                 "value": int(self.value),
                 "cue": float(self.cue),
+                "features": [int(value) for value in self.features],
                 "stream_index": int(self.stream_index),
             }
         }
@@ -39,6 +42,9 @@ class StreamEpisode:
     cue_model: str
     cue_true_positive_rate: float
     cue_false_positive_rate: float
+    feature_count: int
+    feature_true_positive_rate: float
+    feature_false_positive_rate: float
     relevant_count_mode: str
     facts: tuple[StreamFact, ...]
     queries: tuple[StreamFact, ...]
@@ -87,6 +93,9 @@ def make_distractor_stream_episode(
     cue_model: str = "symmetric_label_accuracy",
     cue_true_positive_rate: float | None = None,
     cue_false_positive_rate: float | None = None,
+    feature_count: int = 4,
+    feature_true_positive_rate: float = 0.75,
+    feature_false_positive_rate: float = 0.25,
     key_space: int,
     value_space: int,
 ) -> StreamEpisode:
@@ -94,6 +103,8 @@ def make_distractor_stream_episode(
         raise ValueError("relevant_count must be positive")
     if int(budget) < int(relevant_count):
         raise ValueError("Phase-0 oracle ceiling requires budget >= relevant_count")
+    if int(feature_count) <= 0:
+        raise ValueError("feature_count must be positive")
     total_count = int(relevant_count) * (int(distractor_ratio) + 1)
     if int(key_space) < total_count:
         raise ValueError("key_space must cover stream length without key reuse")
@@ -109,6 +120,13 @@ def make_distractor_stream_episode(
     facts: list[StreamFact] = []
     for index in range(total_count):
         relevant = index in relevant_positions
+        features = weak_feature_vector(
+            rng,
+            relevant=relevant,
+            feature_count=int(feature_count),
+            true_positive_rate=float(feature_true_positive_rate),
+            false_positive_rate=float(feature_false_positive_rate),
+        )
         facts.append(
             StreamFact(
                 key=int(keys[index]),
@@ -119,6 +137,7 @@ def make_distractor_stream_episode(
                     true_positive_rate=true_positive_rate,
                     false_positive_rate=false_positive_rate,
                 ),
+                features=features,
                 stream_index=index,
                 relevant_eval_only=bool(relevant),
             )
@@ -132,6 +151,9 @@ def make_distractor_stream_episode(
         cue_model=str(cue_model),
         cue_true_positive_rate=true_positive_rate,
         cue_false_positive_rate=false_positive_rate,
+        feature_count=int(feature_count),
+        feature_true_positive_rate=clamp01(feature_true_positive_rate),
+        feature_false_positive_rate=clamp01(feature_false_positive_rate),
         relevant_count_mode="fixed_exact",
         facts=tuple(facts),
         queries=queries,
@@ -167,8 +189,74 @@ def cue_for_relevance(
     return 1.0 if rng.random() < clamp01(rate) else 0.0
 
 
+def weak_feature_vector(
+    rng: random.Random,
+    *,
+    relevant: bool,
+    feature_count: int,
+    true_positive_rate: float,
+    false_positive_rate: float,
+) -> tuple[int, ...]:
+    rate = true_positive_rate if relevant else false_positive_rate
+    return tuple(1 if rng.random() < clamp01(rate) else 0 for _ in range(int(feature_count)))
+
+
+def bayes_relevance_score(
+    fact: StreamFact,
+    *,
+    relevant_base_rate: float,
+    feature_true_positive_rate: float,
+    feature_false_positive_rate: float,
+) -> float:
+    """Return log posterior odds up to a monotonic transform."""
+    prior = clamp_probability(relevant_base_rate)
+    tp = clamp_probability(feature_true_positive_rate)
+    fp = clamp_probability(feature_false_positive_rate)
+    score = math.log(prior / (1.0 - prior))
+    for value in fact.features:
+        if int(value):
+            score += math.log(tp / fp)
+        else:
+            score += math.log((1.0 - tp) / (1.0 - fp))
+    return score
+
+
+def bayes_admission_indices(episode: StreamEpisode) -> frozenset[int]:
+    """Select the budgeted top posterior-score facts from deployable features."""
+    base_rate = len(episode.queries) / len(episode.facts)
+    ranked = sorted(
+        episode.facts,
+        key=lambda fact: (
+            -bayes_relevance_score(
+                fact,
+                relevant_base_rate=base_rate,
+                feature_true_positive_rate=episode.feature_true_positive_rate,
+                feature_false_positive_rate=episode.feature_false_positive_rate,
+            ),
+            stable_random_score(seed=episode.seed + 99173, stream_index=fact.key),
+        ),
+    )
+    return frozenset(fact.stream_index for fact in ranked[: episode.budget])
+
+
+def single_feature_admission_indices(episode: StreamEpisode, *, feature_index: int) -> frozenset[int]:
+    """Select budgeted facts ranked by one observable feature only."""
+    ranked = sorted(
+        episode.facts,
+        key=lambda fact: (
+            -int(fact.features[int(feature_index)]),
+            stable_random_score(seed=episode.seed + 41413 + int(feature_index), stream_index=fact.key),
+        ),
+    )
+    return frozenset(fact.stream_index for fact in ranked[: episode.budget])
+
+
 def clamp01(value: float) -> float:
     return max(0.0, min(1.0, float(value)))
+
+
+def clamp_probability(value: float) -> float:
+    return max(1e-9, min(1.0 - 1e-9, float(value)))
 
 
 def random_admission_indices(*, seed: int, stream_length: int, budget: int) -> frozenset[int]:

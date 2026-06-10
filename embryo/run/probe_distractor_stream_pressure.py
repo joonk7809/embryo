@@ -16,18 +16,22 @@ from embryo.memory.distractor_stream import (
     BudgetedFactMemory,
     StreamEpisode,
     StreamFact,
+    bayes_admission_indices,
     make_distractor_stream_episode,
     random_admission_indices,
+    single_feature_admission_indices,
 )
 
 
 GO_DISTRACTOR_STREAM_PRESSURE_CONFIRMED = "GO_distractor_stream_pressure_confirmed"
+GO_DISTRACTOR_STREAM_OBSERVABLE_HEADROOM_CONFIRMED = "GO_distractor_stream_observable_headroom_confirmed"
 NO_GO_ORACLE_PRESSURE_FAILURE = "NO_GO_oracle_pressure_failure"
 NO_GO_STORE_EVERYTHING_NOT_DEGRADED = "NO_GO_store_everything_not_degraded"
+NO_GO_OBSERVABLE_HEADROOM_MISSING = "NO_GO_observable_headroom_missing"
 NO_GO_CONTAMINATION_FAILURE = "NO_GO_contamination_failure"
 
-ARMS = ("oracle_selection", "store_everything_fifo", "random_admission")
-PHASE1_ARMS = (*ARMS, "cue_threshold_gate")
+ARMS = ("oracle_selection", "bayes_observable_selection", "store_everything_fifo", "random_admission")
+PHASE1_ARMS = (*ARMS, "best_single_feature_gate")
 
 
 def run_distractor_stream_pressure_probe(config: Mapping[str, Any]) -> dict[str, Any]:
@@ -41,13 +45,15 @@ def run_distractor_stream_pressure_probe(config: Mapping[str, Any]) -> dict[str,
     cue_model = str(task_cfg.get("cue_model", "symmetric_label_accuracy"))
     cue_true_positive_rate = optional_float(task_cfg.get("cue_true_positive_rate"))
     cue_false_positive_rate = optional_float(task_cfg.get("cue_false_positive_rate"))
+    feature_count = int(task_cfg.get("feature_count", 4))
+    feature_true_positive_rate = optional_float(task_cfg.get("feature_true_positive_rate"))
+    feature_false_positive_rate = optional_float(task_cfg.get("feature_false_positive_rate"))
     distractor_ratios = int_list(task_cfg.get("distractor_ratios"), default=15)
     budgets = int_list(task_cfg.get("budgets"), default=relevant_count)
     p_cues = float_list(task_cfg.get("p_cues"), default=0.5)
-    threshold_candidates = float_list(protocol_cfg.get("threshold_candidates"), default=0.5)
     tuning_seed_start = int(task_cfg.get("tuning_seed_start", seed_start))
     tuning_seed_count = int(task_cfg.get("tuning_seed_count", seed_count))
-    thresholds_by_p_cue = tune_cue_thresholds(
+    single_features_by_p_cue = tune_single_feature_gates(
         seed_start=tuning_seed_start,
         seed_count=tuning_seed_count,
         relevant_count=relevant_count,
@@ -59,7 +65,9 @@ def run_distractor_stream_pressure_probe(config: Mapping[str, Any]) -> dict[str,
         cue_model=cue_model,
         cue_true_positive_rate=cue_true_positive_rate,
         cue_false_positive_rate=cue_false_positive_rate,
-        threshold_candidates=threshold_candidates,
+        feature_count=feature_count,
+        feature_true_positive_rate=feature_true_positive_rate,
+        feature_false_positive_rate=feature_false_positive_rate,
     )
 
     episodes: list[dict[str, Any]] = []
@@ -77,11 +85,18 @@ def run_distractor_stream_pressure_probe(config: Mapping[str, Any]) -> dict[str,
                         cue_model=cue_model,
                         cue_true_positive_rate=cue_true_positive_rate,
                         cue_false_positive_rate=cue_false_positive_rate,
+                        feature_count=feature_count,
+                        feature_true_positive_rate=feature_tp_rate(p_cue, feature_true_positive_rate),
+                        feature_false_positive_rate=feature_fp_rate(p_cue, feature_false_positive_rate),
                         key_space=key_space,
                         value_space=value_space,
                     )
                     for arm in PHASE1_ARMS:
-                        row, failures = run_pressure_arm(episode, arm=arm, cue_threshold=thresholds_by_p_cue.get(p_cue, 0.5))
+                        row, failures = run_pressure_arm(
+                            episode,
+                            arm=arm,
+                            single_feature_index=single_features_by_p_cue.get(p_cue, 0),
+                        )
                         episodes.append(row)
                         contamination_failures.extend(failures)
 
@@ -89,14 +104,24 @@ def run_distractor_stream_pressure_probe(config: Mapping[str, Any]) -> dict[str,
     curve = summarize_curve(episodes)
     pairwise = pairwise_metrics(episodes)
     contamination = {"passed": not contamination_failures, "failure_count": len(contamination_failures), "failures": contamination_failures}
-    decision, reasons = decide_distractor_stream_pressure(
+    pressure_decision, pressure_reasons = decide_distractor_stream_pressure(
         episodes,
         contamination=contamination,
         protocol_cfg=protocol_cfg,
     )
+    headroom_decision, headroom_reasons = decide_observable_headroom(
+        episodes,
+        contamination=contamination,
+        protocol_cfg=protocol_cfg,
+        pressure_decision=pressure_decision,
+    )
     summary = {
-        "decision": decision,
-        "decision_reasons": reasons,
+        "decision": headroom_decision,
+        "decision_reasons": headroom_reasons,
+        "phase0_decision": pressure_decision,
+        "phase0_decision_reasons": pressure_reasons,
+        "phase1_decision": headroom_decision,
+        "phase1_decision_reasons": headroom_reasons,
         "objective": "distractor_stream_capacity_pressure_phase0",
         "boundary": "pressure_confirmation_no_learned_gate_no_policy_training",
         "task": {
@@ -114,6 +139,14 @@ def run_distractor_stream_pressure_probe(config: Mapping[str, Any]) -> dict[str,
             ),
             "cue_true_positive_rate": cue_true_positive_rate,
             "cue_false_positive_rate": cue_false_positive_rate,
+            "feature_count": feature_count,
+            "feature_true_positive_rate": feature_true_positive_rate,
+            "feature_false_positive_rate": feature_false_positive_rate,
+            "feature_definition": feature_definition(
+                feature_true_positive_rate=feature_true_positive_rate,
+                feature_false_positive_rate=feature_false_positive_rate,
+            ),
+            "observable_feature_model": "independent_weak_binary_features_conditioned_on_eval_only_relevance",
             "relevant_count_mode": "fixed_exact",
             "key_space": key_space,
             "value_space": value_space,
@@ -122,19 +155,19 @@ def run_distractor_stream_pressure_probe(config: Mapping[str, Any]) -> dict[str,
             "arms": list(PHASE1_ARMS),
             "eviction": "fifo",
             "random_admission": "exactly_budget_random_indices",
-            "threshold_selection": "per_p_cue_on_tuning_seed_block",
-            "threshold_candidates": threshold_candidates,
+            "bayes_selection": "top_budget_by_known_observable_feature_likelihood_model",
+            "single_feature_selection": "best_feature_index_on_tuning_seed_block",
             "tuning_seed_start": tuning_seed_start,
             "tuning_seed_count": tuning_seed_count,
-            "phase": "pressure_confirmation_plus_cue_threshold_reference",
+            "phase": "pressure_confirmation_plus_best_single_feature_reference",
             **json_safe(protocol_cfg),
         },
-        "thresholds_by_p_cue": {f"{key:.6g}": value for key, value in sorted(thresholds_by_p_cue.items())},
+        "best_single_feature_by_p_cue": {f"{key:.6g}": value for key, value in sorted(single_features_by_p_cue.items())},
         "metrics_by_arm": metrics_by_arm,
         "curve": curve,
         "pairwise": pairwise,
         "fifo_random_diagnostic": fifo_random_diagnostic(episodes, protocol_cfg=protocol_cfg),
-        "cue_threshold_position": cue_threshold_position(episodes),
+        "observable_headroom": observable_headroom(episodes),
         "contamination": contamination,
     }
     return {
@@ -146,7 +179,7 @@ def run_distractor_stream_pressure_probe(config: Mapping[str, Any]) -> dict[str,
     }
 
 
-def tune_cue_thresholds(
+def tune_single_feature_gates(
     *,
     seed_start: int,
     seed_count: int,
@@ -159,12 +192,14 @@ def tune_cue_thresholds(
     cue_model: str,
     cue_true_positive_rate: float | None,
     cue_false_positive_rate: float | None,
-    threshold_candidates: Sequence[float],
-) -> dict[float, float]:
-    thresholds: dict[float, float] = {}
+    feature_count: int,
+    feature_true_positive_rate: float | None,
+    feature_false_positive_rate: float | None,
+) -> dict[float, int]:
+    feature_indices: dict[float, int] = {}
     for p_cue in p_cues:
-        scored: list[tuple[float, float]] = []
-        for threshold in threshold_candidates:
+        scored: list[tuple[float, int]] = []
+        for feature_index in range(int(feature_count)):
             rows: list[dict[str, Any]] = []
             for distractor_ratio in distractor_ratios:
                 for budget in budgets:
@@ -178,27 +213,42 @@ def tune_cue_thresholds(
                             cue_model=cue_model,
                             cue_true_positive_rate=cue_true_positive_rate,
                             cue_false_positive_rate=cue_false_positive_rate,
+                            feature_count=feature_count,
+                            feature_true_positive_rate=feature_tp_rate(p_cue, feature_true_positive_rate),
+                            feature_false_positive_rate=feature_fp_rate(p_cue, feature_false_positive_rate),
                             key_space=key_space,
                             value_space=value_space,
                         )
-                        row, _ = run_pressure_arm(episode, arm="cue_threshold_gate", cue_threshold=float(threshold))
+                        row, _ = run_pressure_arm(episode, arm="best_single_feature_gate", single_feature_index=feature_index)
                         rows.append(row)
-            scored.append((mean(row["recall_success_rate"] for row in rows), float(threshold)))
+            scored.append((mean(row["recall_success_rate"] for row in rows), feature_index))
         scored.sort(key=lambda item: (-item[0], item[1]))
-        thresholds[float(p_cue)] = scored[0][1]
-    return thresholds
+        feature_indices[float(p_cue)] = scored[0][1]
+    return feature_indices
 
 
-def run_pressure_arm(episode: StreamEpisode, *, arm: str, cue_threshold: float = 0.5) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+def run_pressure_arm(episode: StreamEpisode, *, arm: str, single_feature_index: int = 0) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     memory = BudgetedFactMemory(budget=episode.budget)
     failures: list[dict[str, Any]] = []
     random_indices = random_admission_indices(seed=episode.seed, stream_length=len(episode.facts), budget=episode.budget) if arm == "random_admission" else frozenset()
+    bayes_indices = bayes_admission_indices(episode) if arm == "bayes_observable_selection" else frozenset()
+    single_feature_indices = (
+        single_feature_admission_indices(episode, feature_index=single_feature_index)
+        if arm == "best_single_feature_gate"
+        else frozenset()
+    )
     for fact in episode.facts:
         context = deployable_fact_context(fact)
         scan = scan_actor_context(context)
         for failure in scan.get("failures", []):
             failures.append({"seed": episode.seed, "arm": arm, "stream_index": fact.stream_index, **dict(failure)})
-        if should_admit(fact, arm=arm, random_indices=random_indices, cue_threshold=cue_threshold):
+        if should_admit(
+            fact,
+            arm=arm,
+            random_indices=random_indices,
+            bayes_indices=bayes_indices,
+            single_feature_indices=single_feature_indices,
+        ):
             memory.admit(fact)
     correct = 0
     misses = 0
@@ -221,7 +271,10 @@ def run_pressure_arm(episode: StreamEpisode, *, arm: str, cue_threshold: float =
             "cue_model": episode.cue_model,
             "cue_true_positive_rate": episode.cue_true_positive_rate,
             "cue_false_positive_rate": episode.cue_false_positive_rate,
-            "cue_threshold": float(cue_threshold) if arm == "cue_threshold_gate" else None,
+            "feature_count": episode.feature_count,
+            "feature_true_positive_rate": episode.feature_true_positive_rate,
+            "feature_false_positive_rate": episode.feature_false_positive_rate,
+            "single_feature_index": int(single_feature_index) if arm == "best_single_feature_gate" else None,
             "relevant_count_mode": episode.relevant_count_mode,
             "stream_length": len(episode.facts),
             "relevant_count": len(episode.queries),
@@ -239,15 +292,24 @@ def run_pressure_arm(episode: StreamEpisode, *, arm: str, cue_threshold: float =
     )
 
 
-def should_admit(fact: StreamFact, *, arm: str, random_indices: frozenset[int], cue_threshold: float) -> bool:
+def should_admit(
+    fact: StreamFact,
+    *,
+    arm: str,
+    random_indices: frozenset[int],
+    bayes_indices: frozenset[int],
+    single_feature_indices: frozenset[int],
+) -> bool:
     if arm == "oracle_selection":
         return bool(fact.relevant_eval_only)
+    if arm == "bayes_observable_selection":
+        return int(fact.stream_index) in bayes_indices
     if arm == "store_everything_fifo":
         return True
     if arm == "random_admission":
         return int(fact.stream_index) in random_indices
-    if arm == "cue_threshold_gate":
-        return float(fact.cue) >= float(cue_threshold)
+    if arm == "best_single_feature_gate":
+        return int(fact.stream_index) in single_feature_indices
     raise ValueError(f"Unknown distractor-stream arm: {arm}")
 
 
@@ -288,8 +350,9 @@ def summarize_curve(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
             "stream_length": int(cell_rows[0]["stream_length"]),
             "metrics_by_arm": metrics,
             "oracle_minus_fifo_recall": delta,
-            "cue_threshold_minus_fifo_recall": paired_delta_ci(cell_rows, left_arm="cue_threshold_gate", right_arm="store_everything_fifo", metric="recall_success_rate"),
-            "oracle_minus_cue_threshold_recall": paired_delta_ci(cell_rows, left_arm="oracle_selection", right_arm="cue_threshold_gate", metric="recall_success_rate"),
+            "bayes_minus_single_feature_recall": paired_delta_ci(cell_rows, left_arm="bayes_observable_selection", right_arm="best_single_feature_gate", metric="recall_success_rate"),
+            "oracle_minus_bayes_recall": paired_delta_ci(cell_rows, left_arm="oracle_selection", right_arm="bayes_observable_selection", metric="recall_success_rate"),
+            "single_feature_minus_fifo_recall": paired_delta_ci(cell_rows, left_arm="best_single_feature_gate", right_arm="store_everything_fifo", metric="recall_success_rate"),
         }
     return result
 
@@ -299,8 +362,9 @@ def pairwise_metrics(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         "oracle_minus_fifo_recall": paired_delta_ci(rows, left_arm="oracle_selection", right_arm="store_everything_fifo", metric="recall_success_rate"),
         "oracle_minus_random_recall": paired_delta_ci(rows, left_arm="oracle_selection", right_arm="random_admission", metric="recall_success_rate"),
         "fifo_minus_random_recall": paired_delta_ci(rows, left_arm="store_everything_fifo", right_arm="random_admission", metric="recall_success_rate"),
-        "cue_threshold_minus_fifo_recall": paired_delta_ci(rows, left_arm="cue_threshold_gate", right_arm="store_everything_fifo", metric="recall_success_rate"),
-        "oracle_minus_cue_threshold_recall": paired_delta_ci(rows, left_arm="oracle_selection", right_arm="cue_threshold_gate", metric="recall_success_rate"),
+        "bayes_minus_single_feature_recall": paired_delta_ci(rows, left_arm="bayes_observable_selection", right_arm="best_single_feature_gate", metric="recall_success_rate"),
+        "oracle_minus_bayes_recall": paired_delta_ci(rows, left_arm="oracle_selection", right_arm="bayes_observable_selection", metric="recall_success_rate"),
+        "single_feature_minus_fifo_recall": paired_delta_ci(rows, left_arm="best_single_feature_gate", right_arm="store_everything_fifo", metric="recall_success_rate"),
     }
 
 
@@ -339,13 +403,14 @@ def fifo_random_diagnostic(rows: Sequence[Mapping[str, Any]], *, protocol_cfg: M
     }
 
 
-def cue_threshold_position(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+def observable_headroom(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     result: dict[str, Any] = {}
     for p_cue in sorted({float(row["p_cue"]) for row in rows}):
         p_rows = [row for row in rows if float(row["p_cue"]) == p_cue]
         result[f"{p_cue:.6g}"] = {
-            "cue_threshold_minus_fifo_recall": paired_delta_ci(p_rows, left_arm="cue_threshold_gate", right_arm="store_everything_fifo", metric="recall_success_rate"),
-            "oracle_minus_cue_threshold_recall": paired_delta_ci(p_rows, left_arm="oracle_selection", right_arm="cue_threshold_gate", metric="recall_success_rate"),
+            "bayes_minus_single_feature_recall": paired_delta_ci(p_rows, left_arm="bayes_observable_selection", right_arm="best_single_feature_gate", metric="recall_success_rate"),
+            "oracle_minus_bayes_recall": paired_delta_ci(p_rows, left_arm="oracle_selection", right_arm="bayes_observable_selection", metric="recall_success_rate"),
+            "single_feature_minus_fifo_recall": paired_delta_ci(p_rows, left_arm="best_single_feature_gate", right_arm="store_everything_fifo", metric="recall_success_rate"),
             "mean_by_arm": summarize_by_arm(p_rows),
         }
     return result
@@ -362,6 +427,47 @@ def cue_definition(
     if cue_model == "explicit_rates":
         return f"P(cue=1|relevant)={cue_true_positive_rate}; P(cue=1|distractor)={cue_false_positive_rate}."
     return str(cue_model)
+
+
+def feature_definition(
+    *,
+    feature_true_positive_rate: float | None,
+    feature_false_positive_rate: float | None,
+) -> str:
+    if feature_true_positive_rate is None and feature_false_positive_rate is None:
+        return "For each p_cue and each weak feature, P(feature=1|relevant)=p_cue and P(feature=1|distractor)=1-p_cue."
+    return f"For each weak feature, P(feature=1|relevant)={feature_true_positive_rate}; P(feature=1|distractor)={feature_false_positive_rate}."
+
+
+def decide_observable_headroom(
+    rows: Sequence[Mapping[str, Any]],
+    *,
+    contamination: Mapping[str, Any],
+    protocol_cfg: Mapping[str, Any],
+    pressure_decision: str,
+) -> tuple[str, list[str]]:
+    if pressure_decision != GO_DISTRACTOR_STREAM_PRESSURE_CONFIRMED:
+        return pressure_decision, ["phase0_pressure_not_confirmed"]
+    if int(contamination.get("failure_count", 0)) > 0:
+        return NO_GO_CONTAMINATION_FAILURE, ["contamination_failure_count>0"]
+    primary_rows = primary_cell_rows(rows, protocol_cfg)
+    gap = paired_delta_ci(
+        primary_rows,
+        left_arm="bayes_observable_selection",
+        right_arm="best_single_feature_gate",
+        metric="recall_success_rate",
+    )
+    min_gap = float(protocol_cfg.get("min_bayes_single_feature_gap", 0.10))
+    if float(gap["mean"]) < min_gap or float(gap["ci95_low"]) <= 0.0:
+        return NO_GO_OBSERVABLE_HEADROOM_MISSING, [
+            f"bayes_minus_single_feature={float(gap['mean']):.6g}<min_bayes_single_feature_gap={min_gap:.6g}"
+            if float(gap["mean"]) < min_gap
+            else f"bayes_minus_single_feature_ci95_low={float(gap['ci95_low']):.6g}<=0"
+        ]
+    return GO_DISTRACTOR_STREAM_OBSERVABLE_HEADROOM_CONFIRMED, [
+        f"bayes_minus_single_feature={float(gap['mean']):.6g}",
+        f"bayes_minus_single_feature_ci95_low={float(gap['ci95_low']):.6g}",
+    ]
 
 
 def decide_distractor_stream_pressure(
@@ -488,6 +594,14 @@ def float_list(value: Any, *, default: float) -> list[float]:
 
 def optional_float(value: Any) -> float | None:
     return None if value is None else float(value)
+
+
+def feature_tp_rate(p_cue: float, configured: float | None) -> float:
+    return float(p_cue) if configured is None else float(configured)
+
+
+def feature_fp_rate(p_cue: float, configured: float | None) -> float:
+    return 1.0 - float(p_cue) if configured is None else float(configured)
 
 
 def mapping(value: Any) -> Mapping[str, Any]:

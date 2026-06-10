@@ -12,6 +12,10 @@ task:
   # cue_model=symmetric_label_accuracy means:
   # P(cue=1 | relevant) = p_cue
   # P(cue=1 | distractor) = 1 - p_cue
+  feature_count: 4
+  # Weak feature rates default to the same symmetric p_cue semantics:
+  # P(feature_i=1 | relevant) = p_cue
+  # P(feature_i=1 | distractor) = 1 - p_cue
   key_space: 4096
   value_space: 16
 
@@ -19,7 +23,7 @@ protocol:
   frozen_evaluation_grid: true
   primary_distractor_ratio: 15
   primary_budget: 8
-  primary_p_cue: 0.5
-  threshold_candidates: [0.0, 0.5, 1.1]
+  primary_p_cue: 0.8
   min_oracle_recall: 0.9
   min_oracle_fifo_gap: 0.3
+  min_bayes_single_feature_gap: 0.1
